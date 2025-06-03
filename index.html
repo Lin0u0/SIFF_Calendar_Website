@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIFF 电影节快速排片系统</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎬 SIFF 电影节快速排片系统</h1>
+        
+        <!-- 文件上传区域 -->
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">点击选择CSV文件或拖拽文件到此处</div>
+                <div class="upload-hint">支持 .csv 格式文件</div>
+                <input type="file" id="fileInput" accept=".csv">
+            </div>
+            <div class="file-info" id="fileInfo">
+                <span>已加载文件：</span>
+                <span class="file-name" id="fileName"></span>
+                <button class="btn-info" onclick="loadNewFile()" style="margin-left: 10px;">重新选择文件</button>
+            </div>
+        </div>
+        
+        <!-- 错误信息 -->
+        <div class="error-message" id="errorMessage"></div>
+        
+        <!-- 主要内容区域 -->
+        <div class="main-content" id="mainContent">
+            <div class="content-grid">
+                <!-- 左侧面板 -->
+                <div class="left-panel">
+                    <!-- 筛选器 -->
+                    <div class="filters">
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label>单元</label>
+                                <select id="unitFilter">
+                                    <option value="">全部单元</option>
+                                </select>
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>日期</label>
+                                <div class="multi-select-container">
+                                    <div class="multi-select-trigger" onclick="toggleDateDropdown(event)">
+                                        <span id="dateFilterText">全部日期</span>
+                                        <span class="dropdown-arrow">▼</span>
+                                    </div>
+                                    <div class="multi-select-dropdown" id="dateDropdown">
+                                        <div class="multi-select-search">
+                                            <input type="text" placeholder="搜索日期..." onkeyup="filterDateOptions(this.value)">
+                                        </div>
+                                        <div class="quick-select-buttons">
+                                            <button class="btn-quick" onclick="selectWeekend()">选择周末</button>
+                                            <button class="btn-quick" onclick="selectWeekdays()">选择工作日</button>
+                                        </div>
+                                        <div class="multi-select-options" id="dateOptions">
+                                            <label class="multi-select-option">
+                                                <input type="checkbox" value="all" onchange="toggleAllDates(this)">
+                                                <span>全选/取消全选</span>
+                                            </label>
+                                            <!-- 日期选项将在这里动态生成 -->
+                                        </div>
+                                        <div class="multi-select-actions">
+                                            <button class="btn-small btn-primary" onclick="applyDateFilter()">确定</button>
+                                            <button class="btn-small btn-secondary" onclick="clearDateFilter()">清空</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>影院</label>
+                                <select id="cinemaFilter">
+                                    <option value="">全部影院</option>
+                                </select>
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>电影名称</label>
+                                <input type="text" id="movieNameFilter" placeholder="输入中文或英文片名">
+                            </div>
+                        </div>
+                        
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label>导演</label>
+                                <input type="text" id="directorFilter" placeholder="输入导演名称">
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>国家/地区</label>
+                                <select id="countryFilter">
+                                    <option value="">全部国家/地区</option>
+                                </select>
+                            </div>
+                            
+                            <div class="filter-group">
+                                <label>见面会</label>
+                                <select id="meetFilter">
+                                    <option value="">全部</option>
+                                    <option value="yes">有见面会</option>
+                                    <option value="no">无见面会</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="button-group">
+                            <button class="btn-primary" onclick="applyFilters()">应用筛选</button>
+                            <button class="btn-secondary" onclick="resetFilters()">重置筛选</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 结果区域 -->
+                    <div class="results">
+                        <div class="results-header">
+                            <h2>筛选结果</h2>
+                            <div class="results-count">共找到 <span id="resultCount">0</span> 场放映</div>
+                        </div>
+                        <div class="movie-grid" id="movieGrid">
+                            <!-- 电影卡片将在这里动态生成 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 右侧选择面板 -->
+                <div class="selection-panel">
+                    <div class="selection-header">
+                        <h3 class="selection-title">已选电影</h3>
+                        <div class="selection-count" id="selectionCount">0</div>
+                    </div>
+                    
+                    <div class="selected-movies" id="selectedMovies">
+                        <div class="no-selection">暂未选择任何电影</div>
+                    </div>
+                    
+                    <div class="selection-actions">
+                        <button class="btn-primary" onclick="generateCalendar()">生成日历视图</button>
+                        <button class="btn-warning" onclick="exportSelection()">导出选择</button>
+                        <button class="btn-secondary" onclick="clearSelection()">清空选择</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 日历模态框 -->
+        <div class="calendar-modal" id="calendarModal">
+            <div class="calendar-content">
+                <div class="calendar-header">
+                    <h2 class="calendar-title">我的观影日历</h2>
+                    <button class="close-button" onclick="closeCalendar()">×</button>
+                </div>
+                <div class="calendar-grid" id="calendarGrid">
+                    <!-- 日历内容将在这里动态生成 -->
+                </div>
+                <div class="calendar-actions">
+                    <button class="btn-primary" onclick="exportCalendar()">导出日历</button>
+                    <button class="btn-secondary" onclick="closeCalendar()">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
