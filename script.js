@@ -752,16 +752,19 @@ function exportSelection() {
     });
     
     // 创建文本区域显示导出内容
+    // 在 exportSelection 函数中，修改 exportContent 变量
     const exportContent = `
-        <div style="margin-top: 20px;">
-            <h3>导出内容</h3>
-            <textarea class="export-textarea" readonly>${text}</textarea>
-            <div class="button-group" style="margin-top: 10px;">
-                <button class="btn-primary" onclick="copyToClipboard()">复制到剪贴板</button>
-                <button class="btn-info" onclick="downloadAsText()">下载为文本文件</button>
-            </div>
+    <div style="margin-top: 20px;">
+        <h3>导出内容</h3>
+        <textarea class="export-textarea" readonly>${text}</textarea>
+        <div class="button-group" style="margin-top: 10px;">
+            <button class="btn-primary" onclick="copyToClipboard()">复制到剪贴板</button>
+            <button class="btn-info" onclick="downloadAsText()">下载为文本文件</button>
+            <button class="btn-warning" onclick="exportToICS()">下载为日历文件(.ics)</button>
         </div>
+    </div>
     `;
+
     
     // 显示在日历模态框中
     const calendarGrid = document.getElementById('calendarGrid');
@@ -873,3 +876,126 @@ document.getElementById('calendarModal').addEventListener('click', function(e) {
         closeCalendar();
     }
 });
+
+// 生成 ICS 文件内容
+function generateICSContent() {
+    if (selectedMovies.size === 0) {
+        return null;
+    }
+    
+    // ICS 文件头
+    let icsContent = [
+        'BEGIN:VCALENDAR',
+        'VERSION:2.0',
+        'PRODID:-//SIFF//电影节排片系统//CN',
+        'CALSCALE:GREGORIAN',
+        'METHOD:PUBLISH',
+        'X-WR-CALNAME:SIFF电影节观影计划',
+        'X-WR-TIMEZONE:Asia/Shanghai',
+        'BEGIN:VTIMEZONE',
+        'TZID:Asia/Shanghai',
+        'BEGIN:STANDARD',
+        'DTSTART:19700101T000000',
+        'TZOFFSETFROM:+0800',
+        'TZOFFSETTO:+0800',
+        'END:STANDARD',
+        'END:VTIMEZONE'
+    ].join('\r\n');
+    
+    // 添加每个电影事件
+    for (const [id, movie] of selectedMovies) {
+        // 解析开始时间
+        const startDate = parseDateTime(movie['日期'], movie['放映时间']);
+        
+        // 计算结束时间
+        const duration = parseDuration(movie['时长']);
+        const endDate = new Date(startDate.getTime() + duration);
+        
+        // 格式化为 ICS 时间格式（本地时间）
+        const startStr = formatDateToICS(startDate);
+        const endStr = formatDateToICS(endDate);
+        
+        // 生成唯一ID
+        const uid = `siff-${id}-${Date.now()}@siff.com`;
+        
+        // 创建描述
+        const description = [
+            `英文片名：${movie['英文片名']}`,
+            `导演：${movie['导演']}`,
+            `制片国/地区：${movie['制片国/地区']}`,
+            `时长：${movie['时长']}`,
+            `单元：${movie['单元']}`,
+            `影厅：${movie['影厅']}`,
+            movie['见面会'] === '★' ? '★ 有见面会' : ''
+        ].filter(line => line).join('\\n');
+        
+        // 创建事件
+        const event = [
+            '',
+            'BEGIN:VEVENT',
+            `UID:${uid}`,
+            `DTSTART;TZID=Asia/Shanghai:${startStr}`,
+            `DTEND;TZID=Asia/Shanghai:${endStr}`,
+            `SUMMARY:${escapeICSText(movie['中文片名'])}`,
+            `DESCRIPTION:${escapeICSText(description)}`,
+            `LOCATION:${escapeICSText(movie['影院'] + ' - ' + movie['影院地址'])}`,
+            'STATUS:CONFIRMED',
+            'END:VEVENT'
+        ].join('\r\n');
+        
+        icsContent += event;
+    }
+    
+    // ICS 文件尾
+    icsContent += '\r\nEND:VCALENDAR';
+    
+    return icsContent;
+}
+
+// 格式化日期为 ICS 格式
+function formatDateToICS(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = '00';
+    
+    return `${year}${month}${day}T${hours}${minutes}${seconds}`;
+}
+
+// 转义 ICS 文本中的特殊字符
+function escapeICSText(text) {
+    return text
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '');
+}
+
+// 导出为 ICS 文件
+function exportToICS() {
+    const icsContent = generateICSContent();
+    if (!icsContent) {
+        alert('请先选择电影');
+        return;
+    }
+    
+    // 创建 Blob 并下载
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SIFF观影计划_${formatDateForFilename(new Date())}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// 格式化日期用于文件名
+function formatDateForFilename(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}${month}${day}`;
+}

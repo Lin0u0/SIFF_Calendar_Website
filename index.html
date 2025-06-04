@@ -141,6 +141,7 @@
                     <div class="selection-actions">
                         <button class="btn-primary" onclick="generateCalendar()">生成日历视图</button>
                         <button class="btn-warning" onclick="exportSelection()">导出选择</button>
+                        <button class="btn-info" onclick="exportToICS()">导出日历文件(.ics)</button>
                         <button class="btn-secondary" onclick="clearSelection()">清空选择</button>
                     </div>
                 </div>
@@ -158,9 +159,10 @@
                     <!-- 日历内容将在这里动态生成 -->
                 </div>
                 <div class="calendar-actions">
-                    <button class="btn-primary" onclick="exportCalendar()">导出日历</button>
+                    <button class="btn-primary" onclick="exportCalendar()">导出网页日历</button>
+                    <button class="btn-warning" onclick="exportToICS()">导出日历文件(.ics)</button>
                     <button class="btn-secondary" onclick="closeCalendar()">关闭</button>
-                </div>
+                </div>                
             </div>
         </div>
     </div>
