@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIFF 电影节快速排片系统</title>
+    <title>SIFF 电影节快速排片工具</title>
     <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
     <div class="container">
-        <h1>🎬 SIFF 电影节快速排片系统</h1>
+        <h1>🎬 SIFF 电影节快速排片工具</h1>
         
         <!-- 文件上传区域 -->
         <div class="upload-section">
@@ -23,6 +23,13 @@
                 <span class="file-name" id="fileName"></span>
                 <button class="btn-info" onclick="loadNewFile()" style="margin-left: 10px;">重新选择文件</button>
             </div>
+            <div class="download-guide">
+                <p>还没有 CSV 文件？</p>
+                <a href="https://github.com/Lin0u0/SIFF_Calendar_Website/blob/main/SIFF.csv" target="_blank" rel="noopener noreferrer">
+                    📥 前往 GitHub 下载排片表
+                </a>
+            </div>
+        
         </div>
         
         <!-- 错误信息 -->
@@ -168,4 +175,17 @@
     </div>
     <script src="script.js"></script>
 </body>
+<footer class="footer">
+    <div class="footer-content">
+        <p>&copy; Lin0u0. All rights reserved.</p>
+        <p class="footer-links">
+            <a href="https://www.siff.com" target="_blank">SIFF 官网</a>
+            <span class="separator">|</span>
+            <a href="#" onclick="showAbout()">关于系统</a>
+            <span class="separator">|</span>
+            <a href="#" onclick="showHelp()">使用帮助</a>
+        </p>
+        <p class="footer-note">本系统仅供个人排片参考使用，具体信息以官方发布为准</p>
+    </div>
+</footer>
 </html>
