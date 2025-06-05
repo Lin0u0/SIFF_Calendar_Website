@@ -893,6 +893,7 @@ document.getElementById('calendarModal').addEventListener('click', function(e) {
 });
 
 // 生成 ICS 文件内容
+// 生成 ICS 文件内容
 function generateICSContent() {
     if (selectedMovies.size === 0) {
         return null;
@@ -933,8 +934,8 @@ function generateICSContent() {
         // 生成唯一ID
         const uid = `siff-${id}-${Date.now()}@siff.com`;
         
-        // 创建描述
-        const description = [
+        // 创建描述 - 修复换行问题
+        const descriptionLines = [
             `英文片名：${movie['英文片名']}`,
             `导演：${movie['导演']}`,
             `制片国/地区：${movie['制片国/地区']}`,
@@ -942,7 +943,13 @@ function generateICSContent() {
             `单元：${movie['单元']}`,
             `影厅：${movie['影厅']}`,
             movie['见面会'] === '★' ? '★ 有见面会' : ''
-        ].filter(line => line).join('\\n');
+        ].filter(line => line);
+        
+        // 使用 HTML 格式的描述（大多数日历应用支持）
+        const description = escapeICSText(descriptionLines.join(' | '));
+        
+        // 或者使用多行格式（需要正确的折行）
+        const descriptionFormatted = formatICSDescription(descriptionLines);
         
         // 创建事件
         const event = [
@@ -952,7 +959,7 @@ function generateICSContent() {
             `DTSTART;TZID=Asia/Shanghai:${startStr}`,
             `DTEND;TZID=Asia/Shanghai:${endStr}`,
             `SUMMARY:${escapeICSText(movie['中文片名'])}`,
-            `DESCRIPTION:${escapeICSText(description)}`,
+            descriptionFormatted,
             `LOCATION:${escapeICSText(movie['影院'] + ' - ' + movie['影院地址'])}`,
             'STATUS:CONFIRMED',
             'END:VEVENT'
@@ -967,6 +974,27 @@ function generateICSContent() {
     return icsContent;
 }
 
+// 格式化 ICS 描述字段（支持多行）
+function formatICSDescription(lines) {
+    // 方法1：使用单行格式，用分隔符
+    const singleLine = lines.join(' | ');
+    return `DESCRIPTION:${escapeICSText(singleLine)}`;
+    
+    // 方法2：使用 X-ALT-DESC 提供 HTML 格式（某些日历应用支持）
+    // const htmlDesc = lines.join('<br>');
+    // return `DESCRIPTION:${escapeICSText(lines.join(', '))}\r\nX-ALT-DESC;FMTTYPE=text/html:<html><body>${htmlDesc}</body></html>`;
+}
+
+// 修改转义函数，移除 \n 的处理
+function escapeICSText(text) {
+    return text
+        .replace(/\\/g, '\\\\')
+        .replace(/;/g, '\\;')
+        .replace(/,/g, '\\,')
+        .replace(/\r?\n/g, ' '); // 将实际的换行替换为空格
+}
+
+
 // 格式化日期为 ICS 格式
 function formatDateToICS(date) {
     const year = date.getFullYear();
@@ -977,16 +1005,6 @@ function formatDateToICS(date) {
     const seconds = '00';
     
     return `${year}${month}${day}T${hours}${minutes}${seconds}`;
-}
-
-// 转义 ICS 文本中的特殊字符
-function escapeICSText(text) {
-    return text
-        .replace(/\\/g, '\\\\')
-        .replace(/;/g, '\\;')
-        .replace(/,/g, '\\,')
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '');
 }
 
 // 导出为 ICS 文件
