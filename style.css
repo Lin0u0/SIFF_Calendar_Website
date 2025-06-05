@@ -1183,3 +1183,83 @@ body {
         width: 100%;
     }
 }
+
+/* 防止输入框导致布局问题的完整解决方案 */
+
+/* 1. 固定容器布局 */
+.container {
+    max-width: 1400px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px;
+    box-sizing: border-box;
+    /* 防止子元素撑开 */
+    overflow-x: hidden;
+}
+
+/* 2. 固定网格布局 */
+.content-grid {
+    display: grid;
+    grid-template-columns: 1fr 350px;
+    gap: 20px;
+    max-width: 100%;
+    /* 防止网格溢出 */
+    overflow: hidden;
+}
+
+/* 3. 固定筛选器布局 */
+.filters {
+    width: 100%;
+    overflow: visible;
+    /* 添加相对定位以包含绝对定位的子元素 */
+    position: relative;
+}
+
+/* 4. 使用 flexbox 替代 grid（更稳定） */
+.filter-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-bottom: 15px;
+    width: 100%;
+}
+
+.filter-group {
+    flex: 1 1 200px; /* 允许伸缩，最小200px */
+    max-width: 100%;
+    min-width: 0; /* 重要：允许收缩到0 */
+}
+
+/* 5. 固定输入框样式 */
+.filter-group input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+    background: white;
+    /* 防止输入时的尺寸变化 */
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 6. 确保选择框也不会导致问题 */
+.filter-group select {
+    width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
+}
+
+/* 7. 移动端适配 */
+@media (max-width: 768px) {
+    .filter-row {
+        flex-direction: column;
+    }
+    
+    .filter-group {
+        width: 100%;
+        max-width: 100%;
+    }
+}
