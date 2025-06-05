@@ -1,4 +1,4 @@
-<p align="center"># 🎬 SIFF 电影节快速排片系统</p>
+<h1 style="text-align: center;">🎬 SIFF 电影节快速排片系统</h1>
 
 <div align="center">
   <img src="https://img.shields.io/badge/license-GPL--3.0-green.svg" alt="License">
