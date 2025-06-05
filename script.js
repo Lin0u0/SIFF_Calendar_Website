@@ -751,29 +751,44 @@ function exportSelection() {
         }
     });
     
-    // 创建文本区域显示导出内容
-    // 在 exportSelection 函数中，修改 exportContent 变量
+    // 创建导出内容
     const exportContent = `
-    <div style="margin-top: 20px;">
-        <h3>导出内容</h3>
-        <textarea class="export-textarea" readonly>${text}</textarea>
-        <div class="button-group" style="margin-top: 10px;">
-            <button class="btn-primary" onclick="copyToClipboard()">复制到剪贴板</button>
-            <button class="btn-info" onclick="downloadAsText()">下载为文本文件</button>
-            <button class="btn-warning" onclick="exportToICS()">下载为日历文件(.ics)</button>
+        <div class="export-content">
+            <h3>导出预览</h3>
+            <textarea class="export-textarea" readonly>${text}</textarea>
+            <div class="export-actions">
+                <h4>选择导出格式：</h4>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="copyToClipboard()">复制到剪贴板</button>
+                    <button class="btn-info" onclick="downloadAsText()">下载文本文件(.txt)</button>
+                    <button class="btn-success" onclick="exportSelectionAsJSON()">下载JSON文件(.json)</button>
+                    <button class="btn-warning" onclick="exportToICS()">下载日历文件(.ics)</button>
+                </div>
+            </div>
         </div>
-    </div>
     `;
-
     
-    // 显示在日历模态框中
-    const calendarGrid = document.getElementById('calendarGrid');
-    calendarGrid.innerHTML = exportContent;
-    document.getElementById('calendarModal').classList.add('show');
+    // 显示在导出模态框中
+    const exportModalBody = document.getElementById('exportModalBody');
+    exportModalBody.innerHTML = exportContent;
+    document.getElementById('exportModal').classList.add('show');
     
     // 保存导出文本供后续使用
     window.exportedText = text;
 }
+
+// 关闭导出模态框
+function closeExportModal() {
+    document.getElementById('exportModal').classList.remove('show');
+}
+
+// 点击模态框外部关闭
+document.getElementById('exportModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeExportModal();
+    }
+});
+
 
 // 导出日历
 function exportCalendar() {
@@ -1033,4 +1048,317 @@ function showHelp() {
 - 考虑了30分钟通勤时间
 - 支持多日期筛选
 - 可导入手机日历`);
+}
+
+// 导入选择
+function importSelection() {
+    // 创建文件输入元素
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.txt';
+    
+    fileInput.onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const content = event.target.result;
+                parseAndImportSelection(content);
+            } catch (error) {
+                alert('导入失败：' + error.message);
+            }
+        };
+        reader.readAsText(file, 'UTF-8');
+    };
+    
+    fileInput.click();
+}
+
+// 解析并导入选择
+function parseAndImportSelection(content) {
+    if (!moviesData || moviesData.length === 0) {
+        alert('请先加载电影数据（CSV文件）');
+        return;
+    }
+    
+    // 清空当前选择
+    selectedMovies.clear();
+    
+    // 解析导入的内容
+    const lines = content.split('\n');
+    let importedCount = 0;
+    let notFoundMovies = [];
+    
+    // 定义用于匹配的正则表达式
+    const patterns = {
+        chineseTitle: /^\d+\.\s*(.+)$/,
+        time: /时间：(\d+:\d+)/,
+        date: /【(.+?)】/,
+        cinema: /影院：(.+?)\s*-\s*(.+)/
+    };
+    
+    let currentDate = '';
+    let currentMovie = null;
+    
+    for (const line of lines) {
+        // 匹配日期
+        const dateMatch = line.match(patterns.date);
+        if (dateMatch) {
+            currentDate = dateMatch[1];
+            continue;
+        }
+        
+        // 匹配电影标题
+        const titleMatch = line.match(patterns.chineseTitle);
+        if (titleMatch) {
+            // 如果之前有电影信息，先处理它
+            if (currentMovie) {
+                const found = findAndSelectMovie(currentMovie);
+                if (found) {
+                    importedCount++;
+                } else {
+                    notFoundMovies.push(currentMovie.title);
+                }
+            }
+            
+            // 开始新的电影
+            currentMovie = {
+                title: titleMatch[1].trim(),
+                date: currentDate
+            };
+            continue;
+        }
+        
+        // 匹配时间
+        if (currentMovie) {
+            const timeMatch = line.match(patterns.time);
+            if (timeMatch) {
+                currentMovie.time = timeMatch[1];
+            }
+            
+            // 匹配影院
+            const cinemaMatch = line.match(patterns.cinema);
+            if (cinemaMatch) {
+                currentMovie.cinema = cinemaMatch[1].trim();
+            }
+        }
+    }
+    
+    // 处理最后一部电影
+    if (currentMovie) {
+        const found = findAndSelectMovie(currentMovie);
+        if (found) {
+            importedCount++;
+        } else {
+            notFoundMovies.push(currentMovie.title);
+        }
+    }
+    
+    // 更新UI
+    updateSelectionPanel();
+    displayMovies();
+    
+    // 显示导入结果
+    let message = `成功导入 ${importedCount} 部电影`;
+    if (notFoundMovies.length > 0) {
+        message += `\n\n未找到以下电影：\n${notFoundMovies.join('\n')}`;
+        message += '\n\n请确保已加载包含这些电影的CSV文件';
+    }
+    alert(message);
+}
+
+// 查找并选择电影
+function findAndSelectMovie(movieInfo) {
+    // 首先尝试精确匹配（片名+日期+时间）
+    for (const movie of moviesData) {
+        if (movie['中文片名'] === movieInfo.title &&
+            movie['日期'] === movieInfo.date &&
+            movie['放映时间'] === movieInfo.time) {
+            selectedMovies.set(movie.id, movie);
+            return true;
+        }
+    }
+    
+    // 如果精确匹配失败，尝试片名+日期匹配
+    for (const movie of moviesData) {
+        if (movie['中文片名'] === movieInfo.title &&
+            movie['日期'] === movieInfo.date) {
+            selectedMovies.set(movie.id, movie);
+            return true;
+        }
+    }
+    
+    // 如果还是失败，尝试只匹配片名（可能日期格式不同）
+    for (const movie of moviesData) {
+        if (movie['中文片名'] === movieInfo.title) {
+            selectedMovies.set(movie.id, movie);
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+// 导入 JSON 格式的选择（更精确的导入方式）
+function exportSelectionAsJSON() {
+    if (selectedMovies.size === 0) {
+        alert('请先选择电影');
+        return;
+    }
+    
+    const exportData = {
+        version: '1.0',
+        exportDate: new Date().toISOString(),
+        movieCount: selectedMovies.size,
+        movies: Array.from(selectedMovies.values()).map(movie => ({
+            title: movie['中文片名'],
+            englishTitle: movie['英文片名'],
+            date: movie['日期'],
+            time: movie['放映时间'],
+            cinema: movie['影院'],
+            hall: movie['影厅'],
+            director: movie['导演'],
+            duration: movie['时长'],
+            unit: movie['单元']
+        }))
+    };
+    
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `SIFF观影计划_${formatDateForFilename(new Date())}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// 导入 JSON 格式的选择
+function importSelectionFromJSON() {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json';
+    
+    fileInput.onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const data = JSON.parse(event.target.result);
+                importFromJSON(data);
+            } catch (error) {
+                alert('导入失败：JSON 文件格式错误');
+            }
+        };
+        reader.readAsText(file, 'UTF-8');
+    };
+    
+    fileInput.click();
+}
+
+// 从 JSON 数据导入
+function importFromJSON(data) {
+    if (!moviesData || moviesData.length === 0) {
+        alert('请先加载电影数据（CSV文件）');
+        return;
+    }
+    
+    selectedMovies.clear();
+    let importedCount = 0;
+    let notFoundMovies = [];
+    
+    for (const movieInfo of data.movies) {
+        let found = false;
+        
+        // 尝试多个字段组合匹配
+        for (const movie of moviesData) {
+            if (movie['中文片名'] === movieInfo.title &&
+                movie['日期'] === movieInfo.date &&
+                movie['放映时间'] === movieInfo.time &&
+                movie['影院'] === movieInfo.cinema) {
+                selectedMovies.set(movie.id, movie);
+                found = true;
+                importedCount++;
+                break;
+            }
+        }
+        
+        if (!found) {
+            notFoundMovies.push(`${movieInfo.title} - ${movieInfo.date} ${movieInfo.time}`);
+        }
+    }
+    
+    updateSelectionPanel();
+    displayMovies();
+    
+    let message = `成功导入 ${importedCount}/${data.movies.length} 部电影`;
+    if (notFoundMovies.length > 0) {
+        message += `\n\n未找到以下场次：\n${notFoundMovies.slice(0, 5).join('\n')}`;
+        if (notFoundMovies.length > 5) {
+            message += `\n... 还有 ${notFoundMovies.length - 5} 个`;
+        }
+    }
+    alert(message);
+}
+
+// 显示导入选项
+function showImportOptions() {
+    const modal = document.createElement('div');
+    modal.className = 'import-modal';
+    modal.innerHTML = `
+        <div class="import-modal-content">
+            <div class="import-modal-header">
+                <h3>导入观影计划</h3>
+                <button class="close-button" onclick="closeImportModal()">×</button>
+            </div>
+            <div class="import-modal-body">
+                <p>请选择导入方式：</p>
+                <div class="import-options">
+                    <div class="import-option" onclick="importSelection(); closeImportModal();">
+                        <div class="import-icon">📄</div>
+                        <h4>导入文本文件</h4>
+                        <p>导入之前导出的 .txt 文件</p>
+                    </div>
+                    <div class="import-option" onclick="importSelectionFromJSON(); closeImportModal();">
+                        <div class="import-icon">📊</div>
+                        <h4>导入 JSON 文件</h4>
+                        <p>导入之前导出的 .json 文件（更精确）</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+}
+
+// 关闭导入弹窗
+function closeImportModal() {
+    const modal = document.querySelector('.import-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// 复制到剪贴板
+function copyToClipboard() {
+    const textarea = document.querySelector('.export-modal.show .export-textarea');
+    if (textarea) {
+        textarea.select();
+        document.execCommand('copy');
+        
+        // 显示复制成功提示
+        const button = event.target;
+        const originalText = button.textContent;
+        button.textContent = '✓ 已复制！';
+        button.style.background = '#4CAF50';
+        
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.style.background = '';
+        }, 2000);
+    }
 }

@@ -146,11 +146,11 @@
                     </div>
                     
                     <div class="selection-actions">
-                        <button class="btn-primary" onclick="generateCalendar()">生成日历视图</button>
+                        <button class="btn-success" onclick="showImportOptions()">导入选择</button>
                         <button class="btn-warning" onclick="exportSelection()">导出选择</button>
-                        <button class="btn-info" onclick="exportToICS()">导出日历文件(.ics)</button>
+                        <button class="btn-primary" onclick="generateCalendar()">生成日历视图</button>
                         <button class="btn-secondary" onclick="clearSelection()">清空选择</button>
-                    </div>
+                    </div>                    
                 </div>
             </div>
         </div>
@@ -172,6 +172,20 @@
                 </div>                
             </div>
         </div>
+
+        <!-- 导出模态框 -->
+        <div class="export-modal" id="exportModal">
+            <div class="export-modal-content">
+                <div class="export-modal-header">
+                    <h2 class="export-modal-title">导出观影计划</h2>
+                    <button class="close-button" onclick="closeExportModal()">×</button>
+                </div>
+                <div class="export-modal-body" id="exportModalBody">
+                    <!-- 导出内容将在这里动态生成 -->
+                </div>
+            </div>
+        </div>
+
     </div>
     <script src="script.js"></script>
 </body>
