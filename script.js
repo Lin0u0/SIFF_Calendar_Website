@@ -1380,3 +1380,425 @@ function copyToClipboard() {
         }, 2000);
     }
 }
+
+// 生成分享图片入口函数
+function generateShareImage() {
+    if (selectedMovies.size === 0) {
+        alert('请先选择电影');
+        return;
+    }
+    
+    // 询问用户昵称
+    const userName = prompt('请输入您的昵称（用于显示在分享图片上）：', '影迷');
+    if (userName === null) return;
+    
+    // 显示加载提示
+    const modal = document.getElementById('shareModal');
+    const modalBody = document.querySelector('.share-modal-body');
+    modalBody.innerHTML = '<p style="padding: 40px; text-align: center;">正在生成图片，请稍候...</p>';
+    modal.classList.add('show');
+    
+    // 加载 SIFF logo
+    const siffLogo = new Image();
+    siffLogo.onload = function() {
+        generateModernShareImage(userName, siffLogo);
+    };
+    siffLogo.onerror = function() {
+        console.warn('SIFF logo 加载失败，将不显示 logo');
+        generateModernShareImage(userName, null);
+    };
+    siffLogo.src = 'siff-logo.jpg'; // 请确保文件路径正确
+}
+
+// 按日期分组电影数据
+function groupMoviesByDate() {
+    const moviesByDate = new Map();
+    
+    for (const movie of selectedMovies.values()) {
+        const date = movie['日期'];
+        if (!moviesByDate.has(date)) {
+            moviesByDate.set(date, []);
+        }
+        moviesByDate.get(date).push(movie);
+    }
+    
+    // 排序日期
+    const sortedMap = new Map();
+    const sortedDates = Array.from(moviesByDate.keys()).sort((a, b) => {
+        const dateA = parseDateTime(a, '00:00');
+        const dateB = parseDateTime(b, '00:00');
+        return dateA - dateB;
+    });
+    
+    sortedDates.forEach(date => {
+        const movies = moviesByDate.get(date).sort((a, b) => 
+            a['放映时间'].localeCompare(b['放映时间'])
+        );
+        sortedMap.set(date, movies);
+    });
+    
+    return sortedMap;
+}
+
+// 生成现代风格的分享图片
+function generateModernShareImage(userName, siffLogo) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // 设置画布参数
+    const width = 750;
+    const padding = 40;
+    const cardHeight = 140;
+    const cardSpacing = 20;
+    const headerHeight = 300;
+    
+    // 计算所需高度
+    const moviesByDate = groupMoviesByDate();
+    let totalHeight = headerHeight;
+    
+    for (const [date, movies] of moviesByDate) {
+        totalHeight += 80; // 日期标题高度
+        totalHeight += movies.length * (cardHeight + cardSpacing);
+        totalHeight += 40; // 日期组间距
+    }
+    totalHeight += -50; // 底部边距
+    
+    // 设置画布尺寸
+    canvas.width = width;
+    canvas.height = totalHeight;
+    
+    // 启用字体平滑
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    
+    // 绘制背景
+    drawModernBackground(ctx, width, totalHeight);
+    
+    // 绘制头部
+    drawModernHeader(ctx, width, userName, siffLogo);
+    
+    // 绘制电影卡片
+    drawModernMovieCards(ctx, width, moviesByDate, headerHeight);
+    
+    // 添加装饰元素
+    drawDecorativeElements(ctx, width, totalHeight);
+    
+    // 显示画布
+    displayCanvas(canvas);
+}
+
+// 绘制现代背景
+function drawModernBackground(ctx, width, height) {
+    // 主背景 - 柔和的渐变
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, height);
+    bgGradient.addColorStop(0, '#ff6b35');
+    bgGradient.addColorStop(0.5, '#f7931e');
+    bgGradient.addColorStop(1, '#ee4c2c');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, width, height);
+    
+    // 添加噪点纹理
+    ctx.globalAlpha = 0.03;
+    for (let i = 0; i < width; i += 2) {
+        for (let j = 0; j < height; j += 2) {
+            if (Math.random() > 0.5) {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(i, j, 1, 1);
+            }
+        }
+    }
+    ctx.globalAlpha = 1;
+    
+    // 添加光影效果 - 模拟窗户投影
+    ctx.globalAlpha = 0.1;
+    const lightGradient = ctx.createLinearGradient(0, 0, width, height);
+    lightGradient.addColorStop(0, 'transparent');
+    lightGradient.addColorStop(0.5, '#fff');
+    lightGradient.addColorStop(1, 'transparent');
+    
+    // 绘制斜向光束
+    for (let i = 0; i < 5; i++) {
+        ctx.save();
+        ctx.translate(width * 0.3 + i * 100, 0);
+        ctx.rotate(Math.PI / 6);
+        ctx.fillStyle = lightGradient;
+        ctx.fillRect(-50, 0, 100, height * 1.5);
+        ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+}
+
+// 绘制现代头部
+function drawModernHeader(ctx, width, userName, siffLogo) {
+    // 顶部装饰线
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, 40);
+    ctx.lineTo(width - 40, 40);
+    ctx.stroke();
+    
+    // 标题背景卡片
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    drawRoundRect(ctx, 40, 60, width - 80, 160, 20);
+    ctx.fill();
+    
+    // 主标题
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 5;
+    
+    ctx.font = '700 48px -apple-system, "Helvetica Neue", Arial, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(userName, 60, 120);
+    
+    const userNameWidth = ctx.measureText(userName + ' ').width;
+    ctx.font = '700 48px -apple-system, "Helvetica Neue", Arial, sans-serif';
+    ctx.fillText('的 SIFF 2025', 60 + userNameWidth, 120);
+    ctx.restore();
+    
+    // 副标题信息
+    ctx.font = '400 20px -apple-system, "Helvetica Neue", Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    const movieCount = selectedMovies.size;
+    ctx.fillText(`与 ${movieCount} 场电影相遇`, 60, 160);
+    
+    // 日期范围
+    const dates = Array.from(groupMoviesByDate().keys());
+    if (dates.length > 0) {
+        const dateRange = dates.length === 1 ? dates[0] : `${dates[0]} - ${dates[dates.length - 1]}`;
+        ctx.fillText(dateRange, 60, 190);
+    }
+    
+    // SIFF Logo 和装饰
+    if (siffLogo) {
+        const logoSize = 100;
+        const logoX = width - logoSize - 60;
+        const logoY = 90;
+
+        ctx.drawImage(siffLogo, logoX, logoY, logoSize, logoSize);
+    }
+    
+    // 电影元素装饰
+    // drawFilmDecoration(ctx, width - 200, 200);
+}
+
+// 绘制电影装饰元素
+function drawFilmDecoration(ctx, x, y) {
+    // 电影胶片效果
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    ctx.fillRect(x, y, 120, 40);
+    
+    // 胶片孔
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    for (let i = 0; i < 5; i++) {
+        ctx.fillRect(x + 5 + i * 25, y + 5, 15, 10);
+        ctx.fillRect(x + 5 + i * 25, y + 25, 15, 10);
+    }
+}
+
+// 绘制现代电影卡片
+function drawModernMovieCards(ctx, width, moviesByDate, startY) {
+    let yOffset = startY;
+    const padding = 40;
+    const cardHeight = 140;
+    const cardSpacing = 20;
+    
+    for (const [date, movies] of moviesByDate) {
+        // 日期分组标题
+        ctx.save();
+        
+        // 日期背景
+        const dateWidth = 180;
+        const dateHeight = 50;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        drawRoundRect(ctx, padding, yOffset, dateWidth, dateHeight, 25);
+        ctx.fill();
+        
+        // 日期文字
+        ctx.font = '700 24px -apple-system, "Helvetica Neue", Arial, sans-serif';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(date, padding + dateWidth/2, yOffset + dateHeight/2);
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        
+        ctx.restore();
+        
+        yOffset += dateHeight + 30;
+        
+        // 绘制该日期的电影卡片
+        movies.forEach((movie, index) => {
+            drawMovieCard(ctx, movie, padding, yOffset, width - 2 * padding, cardHeight);
+            yOffset += cardHeight + cardSpacing;
+        });
+        
+        yOffset += 20; // 日期组间距
+    }
+}
+
+// 绘制单个电影卡片
+function drawMovieCard(ctx, movie, x, y, width, height) {
+    // 卡片背景
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+    drawRoundRect(ctx, x, y, width, height - 20, 20);
+    ctx.fill();
+    
+    // 卡片边框
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    
+    // 时间标签
+    const timeTagWidth = 140;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    drawRoundRect(ctx, x + 20, y + 30, timeTagWidth, 60, 25);
+    ctx.fill();
+    
+    // 时间文字
+    ctx.font = '700 20px -apple-system, "Helvetica Neue", Arial, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(movie['放映时间'], x + 20 + timeTagWidth/2, y + 55);
+    
+    // 计算结束时间
+    const duration = parseDuration(movie['时长']);
+    const [startHour, startMin] = movie['放映时间'].split(':').map(Number);
+    const endTime = calculateEndTime(startHour, startMin, duration);
+    
+    ctx.font = '400 18px -apple-system, "Helvetica Neue", Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    ctx.fillText(`${endTime}`, x + 20 + timeTagWidth/2, y + 80);
+    ctx.textAlign = 'left';
+    
+    // 电影标题
+    ctx.font = '700 28px -apple-system, "Helvetica Neue", Arial, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    let movieTitle = movie['中文片名'];
+    const maxTitleWidth = width - timeTagWidth - 80;
+    if (ctx.measureText(movieTitle).width > maxTitleWidth) {
+        while (ctx.measureText(movieTitle + '...').width > maxTitleWidth && movieTitle.length > 0) {
+            movieTitle = movieTitle.substring(0, movieTitle.length - 1);
+        }
+        movieTitle += '...';
+    }
+    ctx.fillText(movieTitle, x + timeTagWidth + 40, y + 45);
+    
+    // 影院信息
+    ctx.font = '400 18px -apple-system, "Helvetica Neue", Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+    ctx.fillText(`${movie['影院']} · ${movie['影厅']}`, x + timeTagWidth + 40, y + 75);
+    
+    // 额外信息（导演、时长）
+    ctx.font = '400 16px -apple-system, "Helvetica Neue", Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+    const extraInfo = `${movie['导演']} | ${movie['时长']}`;
+    ctx.fillText(extraInfo, x + timeTagWidth + 40, y + 100);
+    
+    // 特殊标记
+    if (movie['见面会'] === '★') {
+        const meetBadgeX = x + width - 100;
+        const meetBadgeY = y + (height-20)/2 - 20;
+        
+        ctx.fillStyle = '#ffc107';
+        drawRoundRect(ctx, meetBadgeX, meetBadgeY, 80, 40, 20);
+        ctx.fill();
+        
+        ctx.font = '700 16px -apple-system, "Helvetica Neue", Arial, sans-serif';
+        ctx.fillStyle = '#000';
+        ctx.textAlign = 'center';
+        ctx.fillText('见面会', meetBadgeX + 40, meetBadgeY + 25);
+        ctx.textAlign = 'left';
+    }
+    
+    ctx.restore();
+}
+
+// 绘制装饰元素
+function drawDecorativeElements(ctx, width, height) {
+    // 底部装饰
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, height - 60);
+    ctx.lineTo(width - 40, height - 60);
+    ctx.stroke();
+    
+    // 底部文字
+    ctx.font = '400 16px -apple-system, "Helvetica Neue", Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.textAlign = 'center';
+    ctx.fillText('Powered by lin0u0', width/2, height - 30);
+    ctx.textAlign = 'left';
+}
+
+// 绘制圆角矩形的辅助函数
+function drawRoundRect(ctx, x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+}
+
+// 计算结束时间
+function calculateEndTime(startHour, startMin, durationMs) {
+    const totalMinutes = startHour * 60 + startMin + Math.ceil(durationMs / (60 * 1000));
+    const endHour = Math.floor(totalMinutes / 60) % 24;
+    const endMin = totalMinutes % 60;
+    return `${endHour.toString().padStart(2, '0')}:${endMin.toString().padStart(2, '0')}`;
+}
+
+// 显示画布
+function displayCanvas(canvas) {
+    const modalBody = document.querySelector('.share-modal-body');
+    modalBody.innerHTML = `
+        <div class="canvas-container">
+            <canvas id="shareCanvas"></canvas>
+        </div>
+    `;
+    
+    // 将生成的画布复制到显示区域
+    const displayCanvas = document.getElementById('shareCanvas');
+    displayCanvas.width = canvas.width;
+    displayCanvas.height = canvas.height;
+    const displayCtx = displayCanvas.getContext('2d');
+    displayCtx.drawImage(canvas, 0, 0);
+}
+
+// 关闭分享模态框
+function closeShareModal() {
+    const modal = document.getElementById('shareModal');
+    modal.classList.remove('show');
+}
+
+// 格式化日期用于文件名
+function formatDateForFilename(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hour = String(date.getHours()).padStart(2, '0');
+    const minute = String(date.getMinutes()).padStart(2, '0');
+    return `${year}${month}${day}_${hour}${minute}`;
+}
+
+// 点击模态框外部关闭
+document.addEventListener('DOMContentLoaded', function() {
+    const shareModal = document.getElementById('shareModal');
+    if (shareModal) {
+        shareModal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeShareModal();
+            }
+        });
+    }
+});

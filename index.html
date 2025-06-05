@@ -149,6 +149,7 @@
                         <button class="btn-success" onclick="showImportOptions()">导入选择</button>
                         <button class="btn-warning" onclick="exportSelection()">导出选择</button>
                         <button class="btn-primary" onclick="generateCalendar()">生成日历视图</button>
+                        <button class="btn-share" onclick="generateShareImage()">生成分享图片</button>
                         <button class="btn-secondary" onclick="clearSelection()">清空选择</button>
                     </div>                    
                 </div>
@@ -185,6 +186,24 @@
                 </div>
             </div>
         </div>
+
+        <!-- 分享图片模态框 -->
+        <div class="share-modal" id="shareModal">
+            <div class="share-modal-content">
+                <div class="share-modal-header">
+                    <h2 class="share-modal-title">生成分享图片</h2>
+                    <button class="close-button" onclick="closeShareModal()">×</button>
+                </div>
+                <div class="share-modal-body">
+                    <canvas id="shareCanvas" style="max-width: 100%; height: auto;"></canvas>
+                    <div class="share-actions">
+                        <button class="btn-primary" onclick="downloadShareImage()">下载图片</button>
+                        <button class="btn-info" onclick="copyShareImage()">复制图片</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
 
     </div>
     <script src="script.js"></script>
