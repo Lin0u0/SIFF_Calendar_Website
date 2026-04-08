@@ -8,38 +8,44 @@ document.addEventListener('DOMContentLoaded', function() {
     setupFileUpload();
 });
 
+// 当前数据源信息
+let dataSource = null; // 'siff' | 'bjiff' | 'generic'
+
 // 设置文件上传
 function setupFileUpload() {
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
-    
+
     // 点击上传
     uploadArea.addEventListener('click', () => {
         fileInput.click();
     });
-    
+
     // 文件选择
     fileInput.addEventListener('change', handleFileSelect);
-    
+
     // 拖拽上传
     uploadArea.addEventListener('dragover', (e) => {
         e.preventDefault();
         uploadArea.classList.add('drag-over');
     });
-    
+
     uploadArea.addEventListener('dragleave', () => {
         uploadArea.classList.remove('drag-over');
     });
-    
+
     uploadArea.addEventListener('drop', (e) => {
         e.preventDefault();
         uploadArea.classList.remove('drag-over');
-        
+
         const files = e.dataTransfer.files;
-        if (files.length > 0 && files[0].type === 'text/csv') {
-            handleFile(files[0]);
-        } else {
-            showError('请选择CSV格式文件');
+        if (files.length > 0) {
+            const ext = files[0].name.split('.').pop().toLowerCase();
+            if (['csv', 'xlsx', 'xls'].includes(ext)) {
+                handleFile(files[0]);
+            } else {
+                showError('请选择 CSV 或 XLSX 格式文件');
+            }
         }
     });
 }
@@ -54,29 +60,159 @@ function handleFileSelect(e) {
 
 // 处理文件
 function handleFile(file) {
-    const reader = new FileReader();
-    
-    reader.onload = function(e) {
-        try {
-            const csvText = e.target.result;
-            parseCSV(csvText);
-            
-            // 显示文件信息
-            document.getElementById('fileName').textContent = file.name;
-            document.getElementById('fileInfo').classList.add('show');
-            document.getElementById('mainContent').classList.add('show');
-            
-            hideError();
-        } catch (error) {
-            showError('CSV文件解析失败：' + error.message);
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'csv') {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                parseCSV(e.target.result);
+                onFileLoaded(file);
+            } catch (error) {
+                showError('CSV文件解析失败：' + error.message);
+            }
+        };
+        reader.onerror = () => showError('文件读取失败');
+        reader.readAsText(file, 'UTF-8');
+    } else if (ext === 'xlsx' || ext === 'xls') {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                parseXLSX(e.target.result);
+                onFileLoaded(file);
+            } catch (error) {
+                showError('XLSX文件解析失败：' + error.message);
+            }
+        };
+        reader.onerror = () => showError('文件读取失败');
+        reader.readAsArrayBuffer(file);
+    } else {
+        showError('不支持的文件格式');
+    }
+}
+
+function onFileLoaded(file) {
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileInfo').classList.add('show');
+    document.getElementById('mainContent').classList.add('show');
+    hideError();
+}
+
+// 解析 XLSX
+function parseXLSX(arrayBuffer) {
+    const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+
+    // 取第一个 sheet
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+    // 找到表头行（跳过标题/提示行）
+    const range = XLSX.utils.decode_range(sheet['!ref']);
+    let headerRow = -1;
+    for (let r = range.s.r; r <= Math.min(range.s.r + 10, range.e.r); r++) {
+        const cellA = sheet[XLSX.utils.encode_cell({ r, c: 0 })];
+        const val = cellA ? String(cellA.v).trim() : '';
+        if (val === '单元') {
+            headerRow = r;
+            break;
         }
-    };
-    
-    reader.onerror = function() {
-        showError('文件读取失败');
-    };
-    
-    reader.readAsText(file, 'UTF-8');
+    }
+    if (headerRow === -1) {
+        throw new Error('未找到表头行（需包含"单元"列）');
+    }
+
+    // 读取表头
+    const headers = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = sheet[XLSX.utils.encode_cell({ r: headerRow, c })];
+        headers.push(cell ? String(cell.v).trim() : '');
+    }
+
+    // 读取数据行
+    const rawRows = [];
+    for (let r = headerRow + 1; r <= range.e.r; r++) {
+        const row = {};
+        let hasData = false;
+        for (let c = range.s.c; c <= range.e.c; c++) {
+            const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+            if (cell != null) {
+                row[headers[c]] = cell.v;
+                hasData = true;
+            } else {
+                row[headers[c]] = '';
+            }
+        }
+        if (hasData && row['单元']) {
+            rawRows.push(row);
+        }
+    }
+
+    // 检测数据源并标准化
+    moviesData = normalizeData(rawRows, headers);
+
+    initializeFilters();
+    filteredData = [...moviesData];
+    displayMovies();
+}
+
+// 标准化不同来源的数据到统一格式
+function normalizeData(rows, headers) {
+    // 检测是否为北影节格式（有"影片中文名"列）
+    const isBJIFF = headers.includes('影片中文名');
+
+    if (isBJIFF) {
+        dataSource = 'bjiff';
+        return rows.map((row, i) => {
+            // 处理放映时间（datetime对象或字符串）
+            let dateStr = '';
+            let timeStr = '';
+            const rawTime = row['放映时间'];
+
+            if (rawTime instanceof Date) {
+                const month = rawTime.getMonth() + 1;
+                const day = rawTime.getDate();
+                dateStr = `${month}月${day}日`;
+                timeStr = `${String(rawTime.getHours()).padStart(2, '0')}:${String(rawTime.getMinutes()).padStart(2, '0')}`;
+            } else if (typeof rawTime === 'string') {
+                dateStr = rawTime;
+                timeStr = '';
+            }
+
+            // 处理片长
+            const durationRaw = row['片长(分钟)'] || row['片长（分钟）'] || '';
+            const durationStr = typeof durationRaw === 'number' ? `${durationRaw}分钟` : String(durationRaw);
+
+            // 处理活动信息 → 见面会
+            const activity = String(row['活动信息'] || '').trim();
+            const meetStr = activity ? '★' : '';
+
+            return {
+                id: `movie_${i}_${Date.now()}`,
+                '单元': String(row['单元'] || '').trim(),
+                '中文片名': String(row['影片中文名'] || '').trim(),
+                '英文片名': String(row['影片英文名'] || '').trim(),
+                '导演': '',
+                '制片国/地区': '',
+                '时长': durationStr,
+                '日期': dateStr,
+                '放映时间': timeStr,
+                '影院': String(row['影院'] || '').trim(),
+                '影厅': String(row['影厅'] || '').trim(),
+                '影院地址': '',
+                '见面会': meetStr,
+                '票价': row['票价(元)'] || row['票价（元）'] || '',
+                '年份': row['年份'] || '',
+                '活动信息': activity,
+            };
+        });
+    }
+
+    // 默认：SIFF CSV 格式，已经是标准格式
+    dataSource = 'siff';
+    return rows.map((row, i) => {
+        row.id = `movie_${i}_${Date.now()}`;
+        return row;
+    });
 }
 
 // 解析CSV
@@ -138,16 +274,31 @@ function parseCSVLine(line) {
 // 初始化筛选器
 function initializeFilters() {
     // 获取唯一值
-    const units = [...new Set(moviesData.map(m => m['单元']))].sort();
-    const dates = [...new Set(moviesData.map(m => m['日期']))].sort();
-    const cinemas = [...new Set(moviesData.map(m => m['影院']))].sort();
-    const countries = [...new Set(moviesData.flatMap(m => m['制片国/地区'].split(',').map(c => c.trim())))].sort();
-    
+    const units = [...new Set(moviesData.map(m => m['单元']).filter(Boolean))].sort();
+    const dates = [...new Set(moviesData.map(m => m['日期']).filter(Boolean))].sort((a, b) => {
+        const da = parseDateTime(a, '00:00');
+        const db = parseDateTime(b, '00:00');
+        return da - db;
+    });
+    const cinemas = [...new Set(moviesData.map(m => m['影院']).filter(Boolean))].sort();
+    const countries = [...new Set(moviesData.flatMap(m => {
+        const c = m['制片国/地区'];
+        return c ? c.split(',').map(s => s.trim()).filter(Boolean) : [];
+    }))].sort();
+
     // 填充选择框
     populateSelect('unitFilter', units);
-    populateDateMultiSelect(dates); // 使用新的函数填充日期多选
+    populateDateMultiSelect(dates);
     populateSelect('cinemaFilter', cinemas);
     populateSelect('countryFilter', countries);
+
+    // 隐藏/显示不适用的筛选器
+    const directorGroup = document.getElementById('directorFilter').closest('.filter-group');
+    const countryGroup = document.getElementById('countryFilter').closest('.filter-group');
+    const hasDirector = moviesData.some(m => m['导演']);
+    const hasCountry = countries.length > 0;
+    directorGroup.style.display = hasDirector ? '' : 'none';
+    countryGroup.style.display = hasCountry ? '' : 'none';
 }
 
 // 填充选择框
@@ -340,19 +491,19 @@ function applyFilters() {
     
     filteredData = moviesData.filter(movie => {
         if (filters.unit && movie['单元'] !== filters.unit) return false;
-        
+
         // 日期多选筛选
         if (filters.dates.size > 0 && !filters.dates.has(movie['日期'])) return false;
-        
+
         if (filters.cinema && movie['影院'] !== filters.cinema) return false;
-        if (filters.movieName && 
-            !movie['中文片名'].toLowerCase().includes(filters.movieName) && 
-            !movie['英文片名'].toLowerCase().includes(filters.movieName)) return false;
-        if (filters.director && !movie['导演'].toLowerCase().includes(filters.director)) return false;
-        if (filters.country && !movie['制片国/地区'].includes(filters.country)) return false;
+        if (filters.movieName &&
+            !(movie['中文片名'] || '').toLowerCase().includes(filters.movieName) &&
+            !(movie['英文片名'] || '').toLowerCase().includes(filters.movieName)) return false;
+        if (filters.director && !(movie['导演'] || '').toLowerCase().includes(filters.director)) return false;
+        if (filters.country && !(movie['制片国/地区'] || '').includes(filters.country)) return false;
         if (filters.meet === 'yes' && movie['见面会'] !== '★') return false;
         if (filters.meet === 'no' && movie['见面会'] === '★') return false;
-        
+
         return true;
     });
     
@@ -388,46 +539,58 @@ function displayMovies() {
     movieGrid.innerHTML = filteredData.map(movie => {
         const isSelected = selectedMovies.has(movie.id);
         const hasConflict = checkTimeConflict(movie);
-        
+
+        // 构建详情行（只显示有数据的字段）
+        let detailsHTML = '';
+        if (movie['导演']) {
+            detailsHTML += `<div class="detail-item"><span class="detail-label">导演</span><span class="detail-value">${movie['导演']}</span></div>`;
+        }
+        if (movie['制片国/地区']) {
+            detailsHTML += `<div class="detail-item"><span class="detail-label">制片国/地区</span><span class="detail-value">${movie['制片国/地区']}</span></div>`;
+        }
+        if (movie['时长']) {
+            detailsHTML += `<div class="detail-item"><span class="detail-label">时长</span><span class="detail-value">${movie['时长']}</span></div>`;
+        }
+        if (movie['票价']) {
+            detailsHTML += `<div class="detail-item"><span class="detail-label">票价</span><span class="detail-value">${movie['票价']}元</span></div>`;
+        }
+        if (movie['年份']) {
+            detailsHTML += `<div class="detail-item"><span class="detail-label">年份</span><span class="detail-value">${movie['年份']}</span></div>`;
+        }
+
+        // 活动信息badge
+        const meetBadge = movie['见面会'] === '★'
+            ? `<span class="meet-badge">${movie['活动信息'] || '见面会'}</span>`
+            : '';
+
         return `
             <div class="movie-card ${isSelected ? 'selected' : ''} ${hasConflict && isSelected ? 'conflict' : ''}" data-movie-id="${movie.id}">
-                <input type="checkbox" class="movie-checkbox" ${isSelected ? 'checked' : ''} 
+                <input type="checkbox" class="movie-checkbox" ${isSelected ? 'checked' : ''}
                         onchange="toggleSelection('${movie.id}')" id="checkbox_${movie.id}">
-                
+
                 <div class="movie-header">
                     <div>
                         <div class="movie-title">${movie['中文片名']}</div>
-                        <div class="movie-subtitle">${movie['英文片名']}</div>
+                        <div class="movie-subtitle">${movie['英文片名'] || ''}</div>
                     </div>
                     <div class="movie-unit">${movie['单元']}</div>
                 </div>
-                
+
                 <div class="movie-details">
-                    <div class="detail-item">
-                        <span class="detail-label">导演</span>
-                        <span class="detail-value">${movie['导演']}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">制片国/地区</span>
-                        <span class="detail-value">${movie['制片国/地区']}</span>
-                    </div>
-                    <div class="detail-item">
-                        <span class="detail-label">时长</span>
-                        <span class="detail-value">${movie['时长']}</span>
-                    </div>
+                    ${detailsHTML}
                 </div>
-                
+
                 <div class="screening-info">
                     <div class="screening-header">
                         <span class="date-badge">${movie['日期']}</span>
                         <span class="time-badge">${movie['放映时间']}</span>
-                        ${movie['见面会'] === '★' ? '<span class="meet-badge">见面会</span>' : ''}
+                        ${meetBadge}
                         ${hasConflict && isSelected ? '<span class="conflict-badge">时间冲突</span>' : ''}
                     </div>
                     <div class="cinema-info">
                         <div class="cinema-name">${movie['影院']}</div>
-                        <div class="cinema-hall">${movie['影厅']}</div>
-                        <div class="cinema-address">${movie['影院地址']}</div>
+                        <div class="cinema-hall">${movie['影厅'] || ''}</div>
+                        ${movie['影院地址'] ? `<div class="cinema-address">${movie['影院地址']}</div>` : ''}
                     </div>
                 </div>
             </div>
@@ -498,26 +661,36 @@ function parseDateTime(date, time) {
 
 // 解析时长
 function parseDuration(duration) {
+    // 纯数字（来自 XLSX 的分钟数）
+    if (typeof duration === 'number') {
+        return duration * 60 * 1000;
+    }
+
+    const str = String(duration);
+
+    // 纯数字字符串
+    if (/^\d+$/.test(str.trim())) {
+        return parseInt(str.trim()) * 60 * 1000;
+    }
+
     // 支持 "120分钟"、"2小时"、"1小时30分钟" 等格式
     let totalMinutes = 0;
-    
-    // 匹配小时
-    const hourMatch = duration.match(/(\d+)\s*小时/);
+
+    const hourMatch = str.match(/(\d+)\s*小时/);
     if (hourMatch) {
         totalMinutes += parseInt(hourMatch[1]) * 60;
     }
-    
-    // 匹配分钟
-    const minuteMatch = duration.match(/(\d+)\s*分钟/);
+
+    const minuteMatch = str.match(/(\d+)\s*分钟/);
     if (minuteMatch) {
         totalMinutes += parseInt(minuteMatch[1]);
     }
-    
+
     // 如果没有匹配到任何格式，默认120分钟
     if (totalMinutes === 0) {
         totalMinutes = 120;
     }
-    
+
     return totalMinutes * 60 * 1000; // 返回毫秒
 }
 
@@ -742,12 +915,13 @@ function exportSelection() {
         
         text += `\n${index + 1}. ${movie['中文片名']}\n`;
         text += `   时间：${movie['放映时间']}\n`;
-        text += `   影院：${movie['影院']} - ${movie['影厅']}\n`;
-        text += `   地址：${movie['影院地址']}\n`;
-        text += `   导演：${movie['导演']}\n`;
-        text += `   时长：${movie['时长']}\n`;
+        text += `   影院：${movie['影院']}${movie['影厅'] ? ' - ' + movie['影厅'] : ''}\n`;
+        if (movie['影院地址']) text += `   地址：${movie['影院地址']}\n`;
+        if (movie['导演']) text += `   导演：${movie['导演']}\n`;
+        if (movie['时长']) text += `   时长：${movie['时长']}\n`;
+        if (movie['票价']) text += `   票价：${movie['票价']}元\n`;
         if (movie['见面会'] === '★') {
-            text += `   ★ 有见面会\n`;
+            text += `   ★ ${movie['活动信息'] || '有见面会'}\n`;
         }
     });
     
@@ -936,13 +1110,14 @@ function generateICSContent() {
         
         // 创建描述 - 修复换行问题
         const descriptionLines = [
-            `英文片名：${movie['英文片名']}`,
-            `导演：${movie['导演']}`,
-            `制片国/地区：${movie['制片国/地区']}`,
-            `时长：${movie['时长']}`,
+            movie['英文片名'] ? `英文片名：${movie['英文片名']}` : '',
+            movie['导演'] ? `导演：${movie['导演']}` : '',
+            movie['制片国/地区'] ? `制片国/地区：${movie['制片国/地区']}` : '',
+            movie['时长'] ? `时长：${movie['时长']}` : '',
             `单元：${movie['单元']}`,
-            `影厅：${movie['影厅']}`,
-            movie['见面会'] === '★' ? '★ 有见面会' : ''
+            movie['影厅'] ? `影厅：${movie['影厅']}` : '',
+            movie['票价'] ? `票价：${movie['票价']}元` : '',
+            movie['见面会'] === '★' ? `★ ${movie['活动信息'] || '有见面会'}` : ''
         ].filter(line => line);
         
         // 使用 HTML 格式的描述（大多数日历应用支持）
@@ -960,7 +1135,7 @@ function generateICSContent() {
             `DTEND;TZID=Asia/Shanghai:${endStr}`,
             `SUMMARY:${escapeICSText(movie['中文片名'])}`,
             descriptionFormatted,
-            `LOCATION:${escapeICSText(movie['影院'] + ' - ' + movie['影院地址'])}`,
+            `LOCATION:${escapeICSText(movie['影院'] + (movie['影院地址'] ? ' - ' + movie['影院地址'] : ''))}`,
             'STATUS:CONFIRMED',
             'END:VEVENT'
         ].join('\r\n');
@@ -1555,7 +1730,8 @@ function drawModernHeader(ctx, width, userName, siffLogo) {
     
     const userNameWidth = ctx.measureText(userName + ' ').width;
     ctx.font = '700 48px -apple-system, "Helvetica Neue", Arial, sans-serif';
-    ctx.fillText('的 SIFF 2025', 60 + userNameWidth, 120);
+    const festivalTitle = dataSource === 'bjiff' ? '的 BJIFF 2026' : '的 SIFF 2025';
+    ctx.fillText(festivalTitle, 60 + userNameWidth, 120);
     ctx.restore();
     
     // 副标题信息
@@ -1692,10 +1868,11 @@ function drawMovieCard(ctx, movie, x, y, width, height) {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     ctx.fillText(`${movie['影院']} · ${movie['影厅']}`, x + timeTagWidth + 40, y + 75);
     
-    // 额外信息（导演、时长）
+    // 额外信息（导演、时长、票价等）
     ctx.font = '400 16px -apple-system, "Helvetica Neue", Arial, sans-serif';
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-    const extraInfo = `${movie['导演']} | ${movie['时长']}`;
+    const extraParts = [movie['导演'], movie['时长'], movie['票价'] ? movie['票价'] + '元' : ''].filter(Boolean);
+    const extraInfo = extraParts.join(' | ');
     ctx.fillText(extraInfo, x + timeTagWidth + 40, y + 100);
     
     // 特殊标记
