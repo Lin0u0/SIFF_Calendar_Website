@@ -568,6 +568,27 @@ button { cursor: pointer; font-family: inherit; }
 .import-option p { margin: 0; font-size: .8rem; color: var(--text-muted); }
 
 /* ===== Share ===== */
+.share-controls {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.share-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: .9rem;
+    color: var(--text);
+}
+.share-toggle input {
+    width: 16px;
+    height: 16px;
+}
 .canvas-container {
     background: var(--bg);
     border-radius: var(--radius);

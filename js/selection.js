@@ -1,5 +1,5 @@
-import { state } from './state.js';
-import { parseDateTime, parseDuration } from './utils.js';
+import { state, persistState } from './state.js';
+import { parseDateTime, parseDuration, getMovieDate, getMovieTime } from './utils.js';
 import { displayMovies } from './display.js';
 
 export function toggleSelection(movieId) {
@@ -14,20 +14,23 @@ export function toggleSelection(movieId) {
 
     updateSelectionPanel();
     displayMovies();
+    persistState();
 }
 
 export function checkTimeConflict(movie) {
     if (state.selectedMovies.size <= 1) return false;
 
-    const movieStart = parseDateTime(movie['日期'], movie['放映时间']);
+    const movieDate = getMovieDate(movie);
+    const movieTime = getMovieTime(movie);
+    const movieStart = parseDateTime(movieDate, movieTime);
     const movieEnd = new Date(movieStart.getTime() + parseDuration(movie['时长']));
     const buffer = 30 * 60 * 1000;
 
     for (const [id, sel] of state.selectedMovies) {
         if (id === movie.id) continue;
-        if (movie['日期'] !== sel['日期']) continue;
+        if (movieDate !== getMovieDate(sel)) continue;
 
-        const selStart = parseDateTime(sel['日期'], sel['放映时间']);
+        const selStart = parseDateTime(getMovieDate(sel), getMovieTime(sel));
         const selEnd = new Date(selStart.getTime() + parseDuration(sel['时长']));
 
         if (!(movieEnd.getTime() + buffer <= selStart.getTime() ||
@@ -40,15 +43,16 @@ export function checkTimeConflict(movie) {
 
 export function getConflictingMovies(movie) {
     const conflicts = [];
-    const movieStart = parseDateTime(movie['日期'], movie['放映时间']);
+    const movieDate = getMovieDate(movie);
+    const movieStart = parseDateTime(movieDate, getMovieTime(movie));
     const movieEnd = new Date(movieStart.getTime() + parseDuration(movie['时长']));
     const buffer = 30 * 60 * 1000;
 
     for (const [id, sel] of state.selectedMovies) {
         if (id === movie.id) continue;
-        if (movie['日期'] !== sel['日期']) continue;
+        if (movieDate !== getMovieDate(sel)) continue;
 
-        const selStart = parseDateTime(sel['日期'], sel['放映时间']);
+        const selStart = parseDateTime(getMovieDate(sel), getMovieTime(sel));
         const selEnd = new Date(selStart.getTime() + parseDuration(sel['时长']));
 
         if (!(movieEnd.getTime() + buffer <= selStart.getTime() ||
@@ -70,17 +74,19 @@ export function updateSelectionPanel() {
     }
 
     const sorted = Array.from(state.selectedMovies.values()).sort((a, b) => {
-        return parseDateTime(a['日期'], a['放映时间']) - parseDateTime(b['日期'], b['放映时间']);
+        return parseDateTime(getMovieDate(a), getMovieTime(a)) - parseDateTime(getMovieDate(b), getMovieTime(b));
     });
 
     container.innerHTML = sorted.map(movie => {
         const hasConflict = checkTimeConflict(movie);
         const conflictMovies = hasConflict ? getConflictingMovies(movie) : [];
+        const displayDate = getMovieDate(movie);
+        const displayTime = getMovieTime(movie);
         return `
             <div class="sel-item ${hasConflict ? 'conflict' : ''}">
                 <button class="sel-remove" onclick="window._app.toggleSelection('${movie.id}')">&times;</button>
                 <div class="sel-title">${movie['中文片名']}</div>
-                <div class="sel-meta">${movie['日期']} ${movie['放映时间']} &middot; ${movie['影院']}</div>
+                <div class="sel-meta">${displayDate} ${displayTime} &middot; ${movie['影院']}</div>
                 ${hasConflict ? `<div class="sel-conflict">与 ${conflictMovies.join('、')} 时间冲突</div>` : ''}
             </div>
         `;
@@ -93,4 +99,5 @@ export function clearSelection() {
     state.selectedMovies.clear();
     updateSelectionPanel();
     displayMovies();
+    persistState();
 }

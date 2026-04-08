@@ -1,10 +1,10 @@
-import { state } from './state.js';
-import { parseDateTime } from './utils.js';
+import { state, persistState } from './state.js';
+import { parseDateTime, getMovieDate } from './utils.js';
 import { displayMovies } from './display.js';
 
 export function initializeFilters() {
     const units = [...new Set(state.moviesData.map(m => m['单元']).filter(Boolean))].sort();
-    const dates = [...new Set(state.moviesData.map(m => m['日期']).filter(Boolean))].sort((a, b) => {
+    const dates = [...new Set(state.moviesData.map(m => getMovieDate(m)).filter(Boolean))].sort((a, b) => {
         return parseDateTime(a, '00:00') - parseDateTime(b, '00:00');
     });
     const cinemas = [...new Set(state.moviesData.map(m => m['影院']).filter(Boolean))].sort();
@@ -117,6 +117,7 @@ export function updateDateSelection() {
     if (state.selectedDates.size === 0) text.textContent = '全部日期';
     else if (state.selectedDates.size === 1) text.textContent = Array.from(state.selectedDates)[0];
     else text.textContent = `已选择 ${state.selectedDates.size} 个日期`;
+    persistState();
 }
 
 export function applyDateFilter() {
@@ -129,6 +130,7 @@ export function clearDateFilter() {
     document.querySelectorAll('#dateOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
     const text = document.getElementById('dateFilterText');
     text.textContent = '全部日期';
+    persistState();
 }
 
 export function applyFilters() {
@@ -144,7 +146,7 @@ export function applyFilters() {
 
     state.filteredData = state.moviesData.filter(movie => {
         if (filters.unit && movie['单元'] !== filters.unit) return false;
-        if (filters.dates.size > 0 && !filters.dates.has(movie['日期'])) return false;
+        if (filters.dates.size > 0 && !filters.dates.has(getMovieDate(movie))) return false;
         if (filters.cinema && movie['影院'] !== filters.cinema) return false;
         if (filters.movieName &&
             !(movie['中文片名'] || '').toLowerCase().includes(filters.movieName) &&

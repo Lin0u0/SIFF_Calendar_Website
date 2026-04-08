@@ -1,4 +1,4 @@
-import { state } from './state.js';
+import { state, persistState, restoreState, clearPersistedState } from './state.js';
 import { parseCSV, parseXLSX } from './parser.js';
 import { initializeFilters, toggleDateDropdown, filterDateOptions, toggleAllDates, selectWeekend, selectWeekdays, updateDateSelection, applyDateFilter, clearDateFilter, applyFilters, resetFilters } from './filters.js';
 import { displayMovies } from './display.js';
@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModalClose('calendarModal', closeCalendar);
     setupModalClose('exportModal', closeExportModal);
     setupModalClose('shareModal', closeShareModal);
+    restorePersistedUI();
 });
 
 function setupFileUpload() {
@@ -71,14 +72,16 @@ function handleFile(file) {
 }
 
 function onFileLoaded(file) {
-    document.getElementById('fileName').textContent = file.name;
-    document.getElementById('fileInfo').classList.add('show');
-    document.getElementById('mainContent').classList.add('show');
+    state.sourceFileName = file.name;
+    showLoadedState();
     hideError();
 
     initializeFilters();
     state.filteredData = [...state.moviesData];
+    syncSelectedDatesUI();
+    updateSelectionPanel();
     displayMovies();
+    persistState();
 }
 
 function loadNewFile() {
@@ -90,6 +93,9 @@ function loadNewFile() {
     state.filteredData = [];
     state.selectedMovies.clear();
     state.selectedDates.clear();
+    state.dataSource = null;
+    state.sourceFileName = '';
+    clearPersistedState();
 }
 
 function setupModalClose(id, closeFn) {
@@ -105,4 +111,27 @@ function showError(msg) {
 
 function hideError() {
     document.getElementById('errorMessage').classList.remove('show');
+}
+
+function restorePersistedUI() {
+    if (!restoreState()) return;
+
+    showLoadedState();
+    initializeFilters();
+    syncSelectedDatesUI();
+    updateSelectionPanel();
+    applyFilters();
+}
+
+function showLoadedState() {
+    document.getElementById('fileName').textContent = state.sourceFileName || '已恢复本地缓存';
+    document.getElementById('fileInfo').classList.add('show');
+    document.getElementById('mainContent').classList.add('show');
+}
+
+function syncSelectedDatesUI() {
+    document.querySelectorAll('#dateOptions input[type="checkbox"][value]:not([value="all"])').forEach((cb) => {
+        cb.checked = state.selectedDates.has(cb.value);
+    });
+    updateDateSelection();
 }

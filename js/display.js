@@ -1,5 +1,6 @@
 import { state } from './state.js';
 import { checkTimeConflict } from './selection.js';
+import { getMovieDate, getMovieTime } from './utils.js';
 
 export function displayMovies() {
     const grid = document.getElementById('movieGrid');
@@ -14,6 +15,8 @@ export function displayMovies() {
     grid.innerHTML = state.filteredData.map(movie => {
         const isSelected = state.selectedMovies.has(movie.id);
         const hasConflict = checkTimeConflict(movie);
+        const displayDate = getMovieDate(movie);
+        const displayTime = getMovieTime(movie);
 
         const details = [];
         if (movie['导演']) details.push(['导演', movie['导演']]);
@@ -37,15 +40,15 @@ export function displayMovies() {
                     <span class="badge badge-unit">${movie['单元']}</span>
                 </div>
 
-                ${details.length ? `
+                    ${details.length ? `
                 <div class="card-details">
                     ${details.map(([label, val]) => `<span class="detail"><em>${label}</em>${val}</span>`).join('')}
                 </div>` : ''}
 
                 <div class="card-screening">
                     <div class="card-badges">
-                        <span class="badge badge-date">${movie['日期']}</span>
-                        <span class="badge badge-time">${movie['放映时间']}</span>
+                        <span class="badge badge-date">${displayDate}</span>
+                        <span class="badge badge-time">${displayTime}</span>
                         ${meetBadge}
                         ${hasConflict && isSelected ? '<span class="badge badge-conflict">时间冲突</span>' : ''}
                     </div>

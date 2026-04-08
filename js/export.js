@@ -1,11 +1,11 @@
-import { state } from './state.js';
-import { parseDateTime, parseDuration, formatDateToICS, formatDateForFilename, escapeICSText } from './utils.js';
+import { state, persistState } from './state.js';
+import { parseDateTime, parseDuration, formatDateToICS, formatDateForFilename, escapeICSText, getMovieDate, getMovieTime, normalizeDateTimeParts } from './utils.js';
 
 export function exportSelection() {
     if (state.selectedMovies.size === 0) { alert('请先选择电影'); return; }
 
     const sorted = Array.from(state.selectedMovies.values()).sort((a, b) =>
-        parseDateTime(a['日期'], a['放映时间']) - parseDateTime(b['日期'], b['放映时间'])
+        parseDateTime(getMovieDate(a), getMovieTime(a)) - parseDateTime(getMovieDate(b), getMovieTime(b))
     );
 
     let text = '=== 我的观影计划 ===\n\n';
@@ -13,12 +13,14 @@ export function exportSelection() {
 
     let currentDate = '';
     sorted.forEach((movie, i) => {
-        if (movie['日期'] !== currentDate) {
-            currentDate = movie['日期'];
+        const displayDate = getMovieDate(movie);
+        const displayTime = getMovieTime(movie);
+        if (displayDate !== currentDate) {
+            currentDate = displayDate;
             text += `\n【${currentDate}】\n`;
         }
         text += `\n${i + 1}. ${movie['中文片名']}\n`;
-        text += `   时间：${movie['放映时间']}\n`;
+        text += `   时间：${displayTime}\n`;
         text += `   影院：${movie['影院']}${movie['影厅'] ? ' - ' + movie['影厅'] : ''}\n`;
         if (movie['影院地址']) text += `   地址：${movie['影院地址']}\n`;
         if (movie['导演']) text += `   导演：${movie['导演']}\n`;
@@ -70,7 +72,7 @@ export function exportSelectionAsJSON() {
         movieCount: state.selectedMovies.size,
         movies: Array.from(state.selectedMovies.values()).map(m => ({
             title: m['中文片名'], englishTitle: m['英文片名'],
-            date: m['日期'], time: m['放映时间'],
+            date: getMovieDate(m), time: getMovieTime(m),
             cinema: m['影院'], hall: m['影厅'],
             director: m['导演'], duration: m['时长'], unit: m['单元'],
         })),
@@ -97,7 +99,7 @@ export function exportToICS() {
     ].join('\r\n');
 
     for (const [id, movie] of state.selectedMovies) {
-        const start = parseDateTime(movie['日期'], movie['放映时间']);
+        const start = parseDateTime(getMovieDate(movie), getMovieTime(movie));
         const end = new Date(start.getTime() + parseDuration(movie['时长']));
         const uid = `filmfest-${id}-${Date.now()}@filmfest`;
 
@@ -136,8 +138,14 @@ export function exportToICS() {
 
 // Import functions
 export function showImportOptions() {
+    const existingModal = document.getElementById('importModal');
+    if (existingModal) {
+        existingModal.classList.add('show');
+        return;
+    }
+
     const modal = document.createElement('div');
-    modal.className = 'modal-overlay';
+    modal.className = 'modal-overlay show';
     modal.id = 'importModal';
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
     modal.innerHTML = `
@@ -147,11 +155,11 @@ export function showImportOptions() {
                 <button class="btn-close" onclick="document.getElementById('importModal').remove()">&times;</button>
             </div>
             <div class="import-options">
-                <button class="import-option" onclick="window._app.importSelection(); document.getElementById('importModal').remove();">
+                <button type="button" class="import-option" onclick="window._app.importSelection(); document.getElementById('importModal').remove();">
                     <span class="import-icon">TXT</span>
                     <div><strong>导入文本文件</strong><p>导入之前导出的 .txt 文件</p></div>
                 </button>
-                <button class="import-option" onclick="window._app.importSelectionFromJSON(); document.getElementById('importModal').remove();">
+                <button type="button" class="import-option" onclick="window._app.importSelectionFromJSON(); document.getElementById('importModal').remove();">
                     <span class="import-icon">JSON</span>
                     <div><strong>导入 JSON 文件</strong><p>导入之前导出的 .json 文件（更精确）</p></div>
                 </button>
@@ -160,21 +168,40 @@ export function showImportOptions() {
     document.body.appendChild(modal);
 }
 
-export function importSelection() {
+function openImportFilePicker(accept, onFileSelected) {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.txt';
-    input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+    input.accept = accept;
+    input.hidden = true;
+
+    const cleanup = () => {
+        input.value = '';
+        input.remove();
+    };
+
+    input.addEventListener('change', (e) => {
+        const file = e.target.files?.[0];
+        if (!file) {
+            cleanup();
+            return;
+        }
+        onFileSelected(file);
+        cleanup();
+    }, { once: true });
+
+    document.body.appendChild(input);
+    input.click();
+}
+
+export function importSelection() {
+    openImportFilePicker('.txt', (file) => {
         const reader = new FileReader();
         reader.onload = (ev) => {
             try { parseAndImportSelection(ev.target.result); }
             catch (err) { alert('导入失败：' + err.message); }
         };
         reader.readAsText(file, 'UTF-8');
-    };
-    input.click();
+    });
 }
 
 function parseAndImportSelection(content) {
@@ -191,13 +218,15 @@ function parseAndImportSelection(content) {
     };
 
     function trySelect(info) {
+        const infoDate = normalizeDateTimeParts(info.date, info.time).date;
+        const infoTime = normalizeDateTimeParts(info.date, info.time).time;
         for (const m of state.moviesData) {
-            if (m['中文片名'] === info.title && m['日期'] === info.date && m['放映时间'] === info.time) {
+            if (m['中文片名'] === info.title && getMovieDate(m) === infoDate && getMovieTime(m) === infoTime) {
                 state.selectedMovies.set(m.id, m); return true;
             }
         }
         for (const m of state.moviesData) {
-            if (m['中文片名'] === info.title && m['日期'] === info.date) {
+            if (m['中文片名'] === info.title && getMovieDate(m) === infoDate) {
                 state.selectedMovies.set(m.id, m); return true;
             }
         }
@@ -227,6 +256,7 @@ function parseAndImportSelection(content) {
 
     import('./selection.js').then(m => m.updateSelectionPanel());
     import('./display.js').then(m => m.displayMovies());
+    persistState();
 
     let msg = `成功导入 ${imported} 部电影`;
     if (notFound.length) msg += `\n\n未找到：\n${notFound.join('\n')}`;
@@ -234,12 +264,7 @@ function parseAndImportSelection(content) {
 }
 
 export function importSelectionFromJSON() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
-    input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+    openImportFilePicker('.json', (file) => {
         const reader = new FileReader();
         reader.onload = (ev) => {
             try {
@@ -248,8 +273,7 @@ export function importSelectionFromJSON() {
             } catch { alert('导入失败：JSON 格式错误'); }
         };
         reader.readAsText(file, 'UTF-8');
-    };
-    input.click();
+    });
 }
 
 function importFromJSON(data) {
@@ -258,21 +282,23 @@ function importFromJSON(data) {
     let imported = 0, notFound = [];
 
     for (const info of data.movies) {
+        const { date, time } = normalizeDateTimeParts(info.date, info.time);
         let found = false;
         for (const m of state.moviesData) {
-            if (m['中文片名'] === info.title && m['日期'] === info.date &&
-                m['放映时间'] === info.time && m['影院'] === info.cinema) {
+            if (m['中文片名'] === info.title && getMovieDate(m) === date &&
+                getMovieTime(m) === time && m['影院'] === info.cinema) {
                 state.selectedMovies.set(m.id, m);
                 found = true; imported++;
                 break;
             }
         }
-        if (!found) notFound.push(`${info.title} - ${info.date} ${info.time}`);
+        if (!found) notFound.push(`${info.title} - ${date} ${time}`.trim());
     }
 
     // Dynamic imports to avoid circular deps
     import('./selection.js').then(sel => sel.updateSelectionPanel());
     import('./display.js').then(disp => disp.displayMovies());
+    persistState();
 
     let msg = `成功导入 ${imported}/${data.movies.length} 部电影`;
     if (notFound.length) {

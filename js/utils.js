@@ -1,13 +1,65 @@
-// Parse "6月13日" + "13:00" → Date
-export function parseDateTime(dateStr, timeStr) {
-    const year = new Date().getFullYear();
-    const monthMatch = dateStr.match(/(\d+)月/);
-    const dayMatch = dateStr.match(/(\d+)日/);
-    const [hours, minutes] = (timeStr || '00:00').split(':').map(Number);
+function pad2(value) {
+    return String(value).padStart(2, '0');
+}
 
-    if (monthMatch && dayMatch) {
-        return new Date(year, parseInt(monthMatch[1]) - 1, parseInt(dayMatch[1]), hours, minutes);
+export function normalizeDateTimeParts(dateStr, timeStr = '') {
+    const rawDate = String(dateStr || '').trim();
+    const rawTime = String(timeStr || '').trim();
+
+    if (!rawDate && !rawTime) {
+        return { date: '', time: '' };
     }
+
+    const fullMatch = rawDate.match(/^(\d{4}-\d{2}-\d{2})(?:[ T]+(\d{1,2}:\d{2}))?$/);
+    if (fullMatch) {
+        return {
+            date: fullMatch[1],
+            time: rawTime || (fullMatch[2] ? fullMatch[2].padStart(5, '0') : ''),
+        };
+    }
+
+    const monthDayMatch = rawDate.match(/^(\d{1,2})月(\d{1,2})日(?:\s+(\d{1,2}:\d{2}))?$/);
+    if (monthDayMatch) {
+        return {
+            date: `${parseInt(monthDayMatch[1], 10)}月${parseInt(monthDayMatch[2], 10)}日`,
+            time: rawTime || (monthDayMatch[3] ? monthDayMatch[3].padStart(5, '0') : ''),
+        };
+    }
+
+    return { date: rawDate, time: rawTime };
+}
+
+export function getMovieDate(movie) {
+    return normalizeDateTimeParts(movie?.['日期'], movie?.['放映时间']).date;
+}
+
+export function getMovieTime(movie) {
+    return normalizeDateTimeParts(movie?.['日期'], movie?.['放映时间']).time;
+}
+
+// Parse "6月13日" + "13:00" or "2026-04-23 18:30" → Date
+export function parseDateTime(dateStr, timeStr) {
+    const { date, time } = normalizeDateTimeParts(dateStr, timeStr);
+    const normalizedTime = time || '00:00';
+    const [hours, minutes] = normalizedTime.split(':').map(Number);
+
+    const monthDayMatch = date.match(/^(\d{1,2})月(\d{1,2})日$/);
+    if (monthDayMatch) {
+        const year = new Date().getFullYear();
+        return new Date(year, parseInt(monthDayMatch[1], 10) - 1, parseInt(monthDayMatch[2], 10), hours, minutes);
+    }
+
+    const isoDateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (isoDateMatch) {
+        return new Date(
+            parseInt(isoDateMatch[1], 10),
+            parseInt(isoDateMatch[2], 10) - 1,
+            parseInt(isoDateMatch[3], 10),
+            hours,
+            minutes
+        );
+    }
+
     return new Date();
 }
 

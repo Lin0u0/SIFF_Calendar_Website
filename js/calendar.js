@@ -1,5 +1,5 @@
 import { state } from './state.js';
-import { parseDateTime, parseDuration } from './utils.js';
+import { parseDateTime, parseDuration, getMovieDate, getMovieTime } from './utils.js';
 import { checkTimeConflict } from './selection.js';
 
 export function generateCalendar() {
@@ -12,12 +12,13 @@ export function generateCalendar() {
     let minTime = 24, maxTime = 0;
 
     for (const movie of state.selectedMovies.values()) {
-        const date = movie['日期'];
+        const date = getMovieDate(movie);
+        const time = getMovieTime(movie);
         allDates.add(date);
         if (!moviesByDate.has(date)) moviesByDate.set(date, []);
         moviesByDate.get(date).push(movie);
 
-        const [hours] = movie['放映时间'].split(':').map(Number);
+        const [hours] = (time || '00:00').split(':').map(Number);
         minTime = Math.min(minTime, hours);
         const duration = parseDuration(movie['时长']);
         maxTime = Math.max(maxTime, hours + Math.ceil(duration / (60 * 60 * 1000)));
@@ -44,7 +45,8 @@ export function generateCalendar() {
             html += `<td class="calendar-cell" data-date="${date}" data-time="${slot}">`;
             const movies = moviesByDate.get(date) || [];
             movies.forEach(movie => {
-                const [mH, mM] = movie['放映时间'].split(':').map(Number);
+                const movieTime = getMovieTime(movie) || '00:00';
+                const [mH, mM] = movieTime.split(':').map(Number);
                 const [sH] = slot.split(':').map(Number);
                 const dur = parseDuration(movie['时长']);
                 const durH = Math.ceil(dur / (60 * 60 * 1000));
@@ -53,7 +55,7 @@ export function generateCalendar() {
                 if (mH <= sH && sH < endH && mH === sH) {
                     const conflict = checkTimeConflict(movie);
                     html += `<div class="calendar-movie ${conflict ? 'has-conflict' : ''}" style="height:${durH * 60}px;">
-                        <div class="calendar-movie-time">${movie['放映时间']}</div>
+                        <div class="calendar-movie-time">${movieTime}</div>
                         <div class="calendar-movie-title">${movie['中文片名']}</div>
                         <div class="calendar-movie-cinema">${movie['影院']}</div>
                         ${movie['见面会'] === '★' ? '<div class="calendar-movie-meet">见面会</div>' : ''}
