@@ -2,31 +2,77 @@ function pad2(value) {
     return String(value).padStart(2, '0');
 }
 
-export function normalizeDateTimeParts(dateStr, timeStr = '') {
-    const rawDate = String(dateStr || '').trim();
-    const rawTime = String(timeStr || '').trim();
+function normalizeTimeString(timeStr = '') {
+    const raw = String(timeStr || '').trim();
+    if (!raw) return '';
 
-    if (!rawDate && !rawTime) {
-        return { date: '', time: '' };
+    const match = raw.match(/^(\d{1,2}):(\d{1,2})$/);
+    if (!match) return raw;
+
+    return `${pad2(match[1])}:${pad2(match[2])}`;
+}
+
+function buildNormalizedDateParts(year, month, day, time = '') {
+    const normalizedTime = normalizeTimeString(time);
+    const monthNum = parseInt(month, 10);
+    const dayNum = parseInt(day, 10);
+    const safeYear = year != null ? parseInt(year, 10) : new Date().getFullYear();
+
+    return {
+        date: `${monthNum}月${dayNum}日`,
+        time: normalizedTime,
+        year: safeYear,
+        month: monthNum,
+        day: dayNum,
+        canonicalDate: `${safeYear}-${pad2(monthNum)}-${pad2(dayNum)}`,
+    };
+}
+
+export function normalizeDateTimeParts(dateStr, timeStr = '') {
+    if (dateStr instanceof Date) {
+        return buildNormalizedDateParts(
+            dateStr.getFullYear(),
+            dateStr.getMonth() + 1,
+            dateStr.getDate(),
+            timeStr || `${dateStr.getHours()}:${dateStr.getMinutes()}`
+        );
     }
 
-    const fullMatch = rawDate.match(/^(\d{4}-\d{2}-\d{2})(?:[ T]+(\d{1,2}:\d{2}))?$/);
+    const rawDate = String(dateStr || '').trim();
+    const rawTime = normalizeTimeString(timeStr);
+
+    if (!rawDate && !rawTime) {
+        return { date: '', time: '', year: null, month: null, day: null, canonicalDate: '' };
+    }
+
+    const fullMatch = rawDate.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[ T]+(\d{1,2}:\d{1,2}))?$/);
     if (fullMatch) {
-        return {
-            date: fullMatch[1],
-            time: rawTime || (fullMatch[2] ? fullMatch[2].padStart(5, '0') : ''),
-        };
+        return buildNormalizedDateParts(
+            fullMatch[1],
+            fullMatch[2],
+            fullMatch[3],
+            rawTime || fullMatch[4] || ''
+        );
     }
 
     const monthDayMatch = rawDate.match(/^(\d{1,2})月(\d{1,2})日(?:\s+(\d{1,2}:\d{2}))?$/);
     if (monthDayMatch) {
-        return {
-            date: `${parseInt(monthDayMatch[1], 10)}月${parseInt(monthDayMatch[2], 10)}日`,
-            time: rawTime || (monthDayMatch[3] ? monthDayMatch[3].padStart(5, '0') : ''),
-        };
+        return buildNormalizedDateParts(
+            null,
+            monthDayMatch[1],
+            monthDayMatch[2],
+            rawTime || monthDayMatch[3] || ''
+        );
     }
 
-    return { date: rawDate, time: rawTime };
+    return {
+        date: rawDate,
+        time: rawTime,
+        year: null,
+        month: null,
+        day: null,
+        canonicalDate: '',
+    };
 }
 
 export function getMovieDate(movie) {
@@ -39,25 +85,22 @@ export function getMovieTime(movie) {
 
 // Parse "6月13日" + "13:00" or "2026-04-23 18:30" → Date
 export function parseDateTime(dateStr, timeStr) {
-    const { date, time } = normalizeDateTimeParts(dateStr, timeStr);
+    const { canonicalDate, date, time, year, month, day } = normalizeDateTimeParts(dateStr, timeStr);
     const normalizedTime = time || '00:00';
     const [hours, minutes] = normalizedTime.split(':').map(Number);
 
-    const monthDayMatch = date.match(/^(\d{1,2})月(\d{1,2})日$/);
-    if (monthDayMatch) {
-        const year = new Date().getFullYear();
-        return new Date(year, parseInt(monthDayMatch[1], 10) - 1, parseInt(monthDayMatch[2], 10), hours, minutes);
+    if (canonicalDate) {
+        const [fullYear, fullMonth, fullDay] = canonicalDate.split('-').map(Number);
+        return new Date(fullYear, fullMonth - 1, fullDay, hours, minutes);
     }
 
-    const isoDateMatch = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (month != null && day != null) {
+        return new Date(year ?? new Date().getFullYear(), month - 1, day, hours, minutes);
+    }
+
+    const isoDateMatch = date.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
     if (isoDateMatch) {
-        return new Date(
-            parseInt(isoDateMatch[1], 10),
-            parseInt(isoDateMatch[2], 10) - 1,
-            parseInt(isoDateMatch[3], 10),
-            hours,
-            minutes
-        );
+        return new Date(parseInt(isoDateMatch[1], 10), parseInt(isoDateMatch[2], 10) - 1, parseInt(isoDateMatch[3], 10), hours, minutes);
     }
 
     return new Date();

@@ -1,3 +1,5 @@
+import { normalizeDateTimeParts } from './utils.js';
+
 // Global application state
 export const state = {
     moviesData: [],
@@ -33,7 +35,11 @@ export function restoreState() {
         const saved = JSON.parse(raw);
         state.moviesData = Array.isArray(saved.moviesData) ? saved.moviesData : [];
         state.filteredData = [...state.moviesData];
-        state.selectedDates = new Set(Array.isArray(saved.selectedDates) ? saved.selectedDates : []);
+        state.selectedDates = new Set(
+            (Array.isArray(saved.selectedDates) ? saved.selectedDates : [])
+                .map((date) => normalizeDateTimeParts(date).date || String(date || '').trim())
+                .filter(Boolean)
+        );
         state.selectedMovies = new Map();
         state.dataSource = saved.dataSource || null;
         state.sourceFileName = saved.sourceFileName || '';
