@@ -88,7 +88,9 @@ function normalizeData(rows, headers) {
 
     if (isBJIFF) {
         state.dataSource = 'bjiff';
-        state.moviesData = rows.map((row, i) => {
+        state.moviesData = rows
+            .filter(isValidBjiffRow)
+            .map((row, i) => {
             let dateStr = '', timeStr = '';
             const rawTime = row['放映时间'];
 
@@ -121,7 +123,7 @@ function normalizeData(rows, headers) {
                 '年份': row['年份'] || '',
                 '活动信息': activity,
             };
-        });
+            });
     } else {
         state.dataSource = 'siff';
         state.moviesData = rows.map((row, i) => {
@@ -129,4 +131,25 @@ function normalizeData(rows, headers) {
             return row;
         });
     }
+}
+
+function isValidBjiffRow(row) {
+    const unit = String(row['单元'] || '').trim();
+    const title = String(row['影片中文名'] || '').trim();
+    const englishTitle = String(row['影片英文名'] || '').trim();
+    const cinema = String(row['影院'] || '').trim();
+    const hall = String(row['影厅'] || '').trim();
+    const screeningTime = row['放映时间'];
+    const searchableText = [unit, title, englishTitle, cinema, hall, String(screeningTime || '').trim()]
+        .join(' ')
+        .toLowerCase();
+
+    if (!unit) return false;
+    if (unit.includes('无界')) return false;
+    if (searchableText.includes('温馨提示')) return false;
+    if (searchableText.includes('sheet2')) return false;
+    if (searchableText.includes('排片情况请参考')) return false;
+    if (!title || !cinema) return false;
+
+    return screeningTime instanceof Date || /\d{4}-\d{2}-\d{2}/.test(String(screeningTime || '').trim());
 }

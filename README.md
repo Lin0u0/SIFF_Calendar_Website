@@ -1,152 +1,147 @@
-<h1 style="text-align: center;">🎬 SIFF 电影节快速排片系统</h1>
+# SIFF Calendar Website
 
-<div align="center">
-  <img src="https://img.shields.io/badge/license-GPL--3.0-green.svg" alt="License">
-  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome">
-</div>
+一个面向电影节观影排片的纯前端小工具，适合用来导入电影节排片表、筛选场次、安排观影计划，并导出成文本、日历或分享图片。
 
-<div align="center">
-  <h3>一个优雅的上海国际电影节观影计划管理工具</h3>
-  <p>智能排片 · 冲突检测 · 精美分享</p>
-</div>
+当前版本已经从单文件脚本整理为模块化结构，实际运行入口是 `index.html` + `js/app.js`。
 
-## ✨ 特性
+## 功能概览
 
-### 🎯 核心功能
-- **CSV 数据导入** - 支持标准 CSV 格式的排片表导入
-- **智能筛选系统** - 多维度筛选：单元、日期（支持多选）、影院、片名、导演、国家/地区、见面会
-- **时间冲突检测** - 自动检测选中电影的时间冲突，考虑电影时长和 30 分钟通勤时间
-- **日历视图** - 横轴为日期、纵轴为时间的可视化排片表
-- **多格式导出** - 支持文本、JSON、ICS 日历文件等多种导出格式
+- 导入排片表，支持拖拽或点击上传
+- 支持 `csv`、`xlsx`、`xls` 格式
+- 支持标准 SIFF 数据，也兼容一类 BJIFF 风格的 Excel 排片表并自动归一化字段
+- 多维筛选：单元、日期、影院、片名、导演、国家/地区、活动
+- 日期支持多选，并提供“周末 / 工作日”快捷筛选
+- 已选影片侧栏实时汇总，并自动检测时间冲突
+- 冲突检测会结合影片时长，并额外预留 30 分钟通勤缓冲
+- 可生成日历视图，并导出为独立 HTML 页面或 `.ics` 日历文件
+- 支持导出观影计划为 `.txt`、`.json`、`.ics`
+- 支持从已导出的 `.txt` / `.json` 重新导入选择结果
+- 支持生成可分享的观影计划图片
+- 使用 `localStorage` 自动保存当前数据和勾选状态，刷新后可恢复
 
-### 🎨 设计亮点
-- **现代化界面** - 采用卡片式设计，响应式布局
-- **精美分享海报** - 基于 Canvas 生成的个性化观影计划海报
-- **流畅交互** - 优雅的动画效果和即时反馈
+## 适用场景
 
-### 🔧 技术特点
-- **纯前端实现** - 无需服务器，打开即用
-- **数据安全** - 所有数据本地处理，保护隐私
-- **跨平台兼容** - 支持所有现代浏览器
+- 电影节开票前后快速筛片
+- 安排多天、多影院的观影路线
+- 检查时间撞车和连续赶场风险
+- 把观影计划同步到系统日历或发给朋友
 
-## 🚀 快速开始
+## 快速开始
 
-### 在线使用
-访问 [在线演示地址](https://siff-calendar-website.vercel.app/) 即可直接使用
+这是一个无需构建的静态网站项目。
 
-### 本地部署
 1. 克隆仓库
+
 ```bash
 git clone https://github.com/Lin0u0/SIFF_Calendar_Website.git
 cd SIFF_Calendar_Website
 ```
 
-2. 启动本地服务器
-```bash
-# 使用 Python
-python -m http.server 8000
+2. 启动本地静态服务器
 
-# 或直接在浏览器中打开 index.html
+```bash
+python3 -m http.server 8000
 ```
 
-## 📖 使用指南
+3. 在浏览器打开
 
-### 1. 准备数据
-准备包含以下列的 CSV 文件：
-- 单元、中文片名、英文片名、导演、制片国/地区、时长、日期、放映时间、影院、影厅、影院地址、见面会信息
-- 本仓库中亦有提供
+```text
+http://localhost:8000
+```
 
-### 2. 导入数据
-- 点击上传区域或拖拽 CSV 文件到指定区域
-- 系统会自动解析并显示数据
+建议通过本地静态服务器访问。项目使用 ES Module，直接用 `file://` 打开时，部分浏览器会因为模块加载策略导致页面无法正常工作。
 
-### 3. 筛选电影
-使用筛选器找到感兴趣的电影：
-- **日期多选**：支持选择多个日期，快速选择周末/工作日
-- **关键词搜索**：支持片名、导演搜索
-- **特殊筛选**：如只看有见面会的场次
+## 数据格式
 
-### 4. 管理选择
-- 点击复选框选择想看的电影
-- 系统自动检测时间冲突（红色标记）
-- 右侧面板实时显示已选电影
+### SIFF CSV
 
-### 5. 查看和导出
-- **日历视图**：生成可视化的观影时间表
-- **导出选择**：
-  - 文本格式（.txt）- 便于阅读和分享
-  - JSON 格式（.json）- 便于导入和备份
-  - ICS 格式（.ics）- 可导入手机日历
-- **分享海报**：生成观影计划海报
+项目根目录自带一份示例数据：[SIFF.csv](/Users/lin0u0/Code/Web/SIFF_Calendar_Website/SIFF.csv)。
 
-## 🎯 功能详解
+常见字段包括：
 
-### 时间冲突检测
-- 自动计算电影结束时间
-- 考虑 30 分钟通勤缓冲时间
-- 冲突电影醒目标记提示
+- `单元`
+- `中文片名`
+- `英文片名`
+- `导演`
+- `制片国/地区`
+- `时长`
+- `日期`
+- `放映时间`
+- `影院`
+- `影厅`
+- `影院地址`
+- `见面会`
 
-### 导入导出系统
-- **导出**：保存当前选择，支持多种格式
-- **导入**：恢复之前的选择，支持文本和 JSON
+### Excel 排片表
 
-### 分享海报生成
-- 现代化设计风格
-- 自定义昵称显示
-- 自动适应内容长度
-- 支持下载和复制
+Excel 文件读取第一张工作表，并会在前几行中自动寻找表头。当前逻辑要求表头行中包含 `单元` 列。
 
-## 🛠️ 技术栈
+如果表头中存在 `影片中文名` 等字段，系统会按兼容格式处理，并映射成统一字段结构后再参与筛选、导出和冲突检测。
 
-- **前端框架**：原生 JavaScript（ES6+）
-- **样式设计**：CSS3 with Flexbox & Grid
-- **图形生成**：Canvas API
-- **文件处理**：FileReader API
+## 使用说明
 
-## 📱 浏览器兼容性
+1. 上传排片表。
+2. 通过筛选条件缩小候选场次。
+3. 勾选想看的场次，右侧会实时显示已选结果。
+4. 若时间冲突，卡片和日历视图会给出明显提示。
+5. 在右侧面板执行后续操作：
 
-- Chrome / Edge（推荐）
-- Firefox
-- Safari
-- 移动端浏览器
+- `日历视图`：查看时间排布
+- `导出`：导出为文本、JSON 或 ICS
+- `分享图片`：生成海报式分享图
+- `导入`：从之前导出的文本或 JSON 恢复选择
+- `清空`：移除当前已选内容
 
-## 🤝 贡献指南
+## 项目结构
 
-欢迎提交 Issue 和 Pull Request！
+```text
+.
+├── index.html          # 页面结构与入口
+├── style.css           # 全局样式
+├── js/
+│   ├── app.js          # 应用初始化、文件上传、状态恢复
+│   ├── parser.js       # CSV / Excel 解析与字段归一化
+│   ├── filters.js      # 筛选逻辑与日期多选
+│   ├── display.js      # 影片列表渲染
+│   ├── selection.js    # 勾选状态与冲突检测
+│   ├── calendar.js     # 日历视图与网页导出
+│   ├── export.js       # 文本 / JSON / ICS 导入导出
+│   ├── share.js        # 分享图片生成
+│   ├── state.js        # 全局状态与 localStorage 持久化
+│   └── utils.js        # 日期、时长、绘制等通用工具
+├── SIFF.csv            # 示例数据
+└── LICENSE
+```
 
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
+## 技术实现
 
-## 📄 开源协议
+- 原生 HTML / CSS / JavaScript
+- 浏览器端文件读取：`FileReader`
+- Excel 解析：`SheetJS`
+- 图片生成：`Canvas API`
+- 本地持久化：`localStorage`
 
-本项目采用 GPL-3.0 协议 - 查看 [LICENSE](LICENSE) 文件了解详情
+项目没有后端服务，所有数据处理都在浏览器本地完成。
 
-### GPL-3.0 协议要点：
-- ✅ 商业使用
-- ✅ 修改
-- ✅ 分发
-- ✅ 专利使用
-- ✅ 私人使用
-- ❗ 需要开源
-- ❗ 需要相同协议
-- ❗ 需要声明变更
+## 已知边界
 
-## 🙏 致谢
+- 当前 Excel 解析只读取第一张工作表
+- 非标准排片表依赖字段名匹配，字段差异过大时需要先整理数据
+- 冲突检测使用固定 30 分钟缓冲，不区分具体影院间距离
+- 年份解析依赖当前年份或表格中的日期信息，跨年电影节场景可能需要额外校正
 
-- 感谢 SIFF 上海国际电影节
-- 感谢所有贡献者和使用者
+## 后续维护建议
 
-## 📮 联系方式
+- 如果后续继续长期维护，建议补一个简单的本地开发脚本或 `serve` 命令
+- 可以补充真实截图或 GIF，降低首次使用门槛
+- 可以把导入字段要求抽成单独文档，方便适配更多电影节表格
+- 根目录中的旧版 [script.js](/Users/lin0u0/Code/Web/SIFF_Calendar_Website/script.js) 目前不是页面入口，如确认不再使用，可以后续单独清理
 
-- 项目主页：[https://github.com/SIFF_Calendar_Website](https://github.com/SIFF_Calendar_Website)
-- Issue 反馈：[https://github.com/SIFF_Calendar_Website/issues](https://github.com/SIFF_Calendar_Website/issues)
+## 开源协议
 
----
+项目使用 GPL-3.0 协议，详见 [LICENSE](/Users/lin0u0/Code/Web/SIFF_Calendar_Website/LICENSE)。
 
-<div align="center">
-  <p>如果这个项目对你有帮助，请给一个 ⭐️ Star！</p>
-  <p>Made with ❤️ for SIFF movie lovers</p>
-</div>
+## 相关链接
+
+- 仓库主页：[Lin0u0/SIFF_Calendar_Website](https://github.com/Lin0u0/SIFF_Calendar_Website)
+- 问题反馈：[Issues](https://github.com/Lin0u0/SIFF_Calendar_Website/issues)

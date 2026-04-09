@@ -7,24 +7,50 @@ const shareConfig = {
     showPriceInfo: true,
 };
 
+const shareTheme = {
+    bg: '#f5f5f5',
+    surface: '#ffffff',
+    surfaceRaised: '#f0f0f0',
+    ink: '#000000',
+    text: '#1a1a1a',
+    secondary: '#666666',
+    muted: '#999999',
+    border: '#e8e8e8',
+    borderStrong: '#cccccc',
+    accent: '#d71921',
+    warning: '#d4a843',
+};
+
 function groupMoviesByDate() {
     const byDate = new Map();
     for (const movie of state.selectedMovies.values()) {
-        const d = getMovieDate(movie);
-        if (!byDate.has(d)) byDate.set(d, []);
-        byDate.get(d).push(movie);
+        const date = getMovieDate(movie);
+        if (!byDate.has(date)) byDate.set(date, []);
+        byDate.get(date).push(movie);
     }
+
     const sorted = new Map();
     Array.from(byDate.keys())
-        .sort((a, b) => parseDateTime(a, '00:00') - parseDateTime(b, '00:00'))
-        .forEach(d => sorted.set(d, byDate.get(d).sort((a, b) => getMovieTime(a).localeCompare(getMovieTime(b)))));
+        .sort((leftDate, rightDate) => parseDateTime(leftDate, '00:00') - parseDateTime(rightDate, '00:00'))
+        .forEach((date) => {
+            const movies = byDate.get(date).sort((leftMovie, rightMovie) =>
+                getMovieTime(leftMovie).localeCompare(getMovieTime(rightMovie))
+            );
+            sorted.set(date, movies);
+        });
+
     return sorted;
 }
 
 export function generateShareImage() {
-    if (state.selectedMovies.size === 0) { alert('请先选择电影'); return; }
+    if (state.selectedMovies.size === 0) {
+        alert('请先选择电影');
+        return;
+    }
+
     const userName = prompt('请输入您的昵称：', shareConfig.userName || '影迷');
     if (userName === null) return;
+
     shareConfig.userName = userName.trim() || '影迷';
 
     const modal = document.getElementById('shareModal');
@@ -32,111 +58,59 @@ export function generateShareImage() {
     modal.classList.add('show');
     body.innerHTML = getShareControlsHTML();
     bindShareControls();
-    render(shareConfig.userName);
+    renderSharePreview();
 }
 
-function render(userName) {
+function renderSharePreview() {
     const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    const W = 750, pad = 40, cardGap = 20, headerH = 300, footerH = 72;
-    const byDate = groupMoviesByDate();
+    const context = canvas.getContext('2d');
+    const width = 1080;
+    const pagePadding = 56;
+    const sectionGap = 26;
+    const cardGap = 18;
+    const headerHeight = 268;
+    const footerHeight = 84;
+    const dateHeaderHeight = 56;
+    const moviesByDate = groupMoviesByDate();
 
-    let H = headerH + footerH;
-    for (const [, movies] of byDate) {
-        H += 80;
+    let height = pagePadding + headerHeight + sectionGap + footerHeight;
+    for (const [, movies] of moviesByDate) {
+        height += dateHeaderHeight + 18;
         movies.forEach((movie) => {
-            H += getCardHeight(ctx, movie) + cardGap;
+            height += getCardHeight(context, movie, width - pagePadding * 2) + cardGap;
         });
-        H += 20;
+        height += sectionGap;
     }
 
-    canvas.width = W;
-    canvas.height = H;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    canvas.width = width;
+    canvas.height = height;
 
-    // Background
-    const bg = ctx.createLinearGradient(0, 0, 0, H);
-    bg.addColorStop(0, '#6366f1');
-    bg.addColorStop(0.5, '#8b5cf6');
-    bg.addColorStop(1, '#a855f7');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, W, H);
+    context.fillStyle = shareTheme.bg;
+    context.fillRect(0, 0, width, height);
+    drawDotGrid(context, width, height);
 
-    // Subtle light beams
-    ctx.globalAlpha = 0.06;
-    for (let i = 0; i < 5; i++) {
-        ctx.save();
-        ctx.translate(W * 0.3 + i * 100, 0);
-        ctx.rotate(Math.PI / 6);
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(-40, 0, 80, H * 1.5);
-        ctx.restore();
-    }
-    ctx.globalAlpha = 1;
+    const headerY = pagePadding;
+    drawHeader(context, pagePadding, headerY, width - pagePadding * 2, headerHeight);
 
-    // Header card
-    const headerX = 40;
-    const headerY = 60;
-    const headerW = W - 80;
-    const headerHCard = 160;
-    const headerContentMaxW = headerW - 64;
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    drawRoundRect(ctx, headerX, headerY, headerW, headerHCard, 20);
-    ctx.fill();
+    let cursorY = headerY + headerHeight + sectionGap;
+    for (const [date, movies] of moviesByDate) {
+        drawDateHeader(context, pagePadding, cursorY, width - pagePadding * 2, dateHeaderHeight, date);
+        cursorY += dateHeaderHeight + 18;
 
-    const stats = getShareStats();
-    const dates = Array.from(byDate.keys());
-    const range = dates.length > 0
-        ? (dates.length === 1 ? dates[0] : `${dates[0]} - ${dates[dates.length - 1]}`)
-        : '';
-    drawHeaderContent(ctx, {
-        x: headerX + 32,
-        y: headerY,
-        w: headerContentMaxW,
-        h: headerHCard,
-        title: `${userName} 的 ${state.dataSource === 'bjiff' ? 'BJIFF 2026' : 'SIFF 2025'}`,
-        subtitle: `与 ${state.selectedMovies.size} 场电影相遇`,
-        range,
-        stats,
-    });
-
-    // Movie cards
-    let y = headerH;
-    for (const [date, movies] of byDate) {
-        ctx.fillStyle = 'rgba(255,255,255,0.2)';
-        drawRoundRect(ctx, pad, y, 180, 50, 25);
-        ctx.fill();
-        ctx.font = '700 24px -apple-system, "Helvetica Neue", Arial, sans-serif';
-        ctx.fillStyle = '#fff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(date, pad + 90, y + 25);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
-        y += 80;
-
-        movies.forEach(movie => {
-            const cardH = getCardHeight(ctx, movie);
-            drawCard(ctx, movie, pad, y, W - 2 * pad, cardH);
-            y += cardH + cardGap;
+        movies.forEach((movie) => {
+            const cardHeight = getCardHeight(context, movie, width - pagePadding * 2);
+            drawMovieCard(context, pagePadding, cursorY, width - pagePadding * 2, cardHeight, movie);
+            cursorY += cardHeight + cardGap;
         });
-        y += 20;
+
+        cursorY += sectionGap;
     }
 
-    // Footer
-    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(40, H - 60); ctx.lineTo(W - 40, H - 60); ctx.stroke();
-    ctx.font = '400 16px -apple-system, "Helvetica Neue", Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.textAlign = 'center';
-    ctx.fillText('Powered by lin0u0', W / 2, H - 30);
-    ctx.textAlign = 'left';
+    drawFooter(context, pagePadding, height - footerHeight, width - pagePadding * 2, footerHeight);
 
-    // Display
     const container = document.querySelector('.share-modal-body .canvas-container');
     if (!container) return;
+
     container.innerHTML = '<canvas id="shareCanvas"></canvas>';
     const display = document.getElementById('shareCanvas');
     display.width = canvas.width;
@@ -144,300 +118,323 @@ function render(userName) {
     display.getContext('2d').drawImage(canvas, 0, 0);
 }
 
-function drawCard(ctx, movie, x, y, w, h) {
-    ctx.save();
-    const cardRadius = Math.round(Math.min(h * 0.18, 30));
-    const badgeW = movie['见面会'] === '★' ? 100 : 0;
-    const outerPadX = 24;
-    const outerPadY = 20;
-    const timePillW = 154;
-    const timePillH = 76;
-    const timePillRadius = Math.round(Math.min(timePillH * 0.34, cardRadius - 2));
-    const gap = 22;
-    const contentLeft = x + outerPadX + timePillW + gap;
-    const contentRight = x + w - outerPadX - badgeW - (badgeW ? 16 : 0);
-    const contentMaxW = Math.max(160, contentRight - contentLeft);
-    const movieTime = getMovieTime(movie) || '00:00';
-    const dur = parseDuration(movie['时长']);
-    const [sh, sm] = movieTime.split(':').map(Number);
-    const layout = measureCardLayout(ctx, movie, contentMaxW);
-    const innerHeight = h - outerPadY * 2;
-    const timePillY = y + outerPadY + (innerHeight - timePillH) / 2;
-    const contentTop = y + outerPadY + (innerHeight - layout.totalHeight) / 2;
+function drawDotGrid(context, width, height) {
+    context.save();
+    context.fillStyle = '#dddddd';
 
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    drawRoundRect(ctx, x, y, w, h, cardRadius);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    // Time tag
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    drawRoundRect(ctx, x + outerPadX, timePillY, timePillW, timePillH, timePillRadius);
-    ctx.fill();
-    ctx.font = '700 20px -apple-system, "Helvetica Neue", Arial, sans-serif';
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(movieTime, x + outerPadX + timePillW / 2, timePillY + 24);
-
-    ctx.font = '400 18px -apple-system, "Helvetica Neue", Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.fillText(calculateEndTime(sh, sm, dur), x + outerPadX + timePillW / 2, timePillY + 54);
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-
-    // Title
-    ctx.font = '700 28px -apple-system, "Helvetica Neue", Arial, sans-serif';
-    ctx.fillStyle = '#fff';
-    ctx.textBaseline = 'top';
-    layout.titleLines.forEach((line, index) => {
-        ctx.fillText(line, contentLeft, contentTop + index * layout.titleLineHeight);
-    });
-
-    ctx.font = '600 18px -apple-system, "Helvetica Neue", Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    layout.cinemaLines.forEach((line, index) => {
-        ctx.fillText(line, contentLeft, contentTop + layout.cinemaOffset + index * layout.cinemaLineHeight);
-    });
-
-    ctx.font = '400 16px -apple-system, "Helvetica Neue", Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255,255,255,0.72)';
-    layout.metaLines.forEach((line, index) => {
-        ctx.fillText(line, contentLeft, contentTop + layout.metaOffset + index * layout.metaLineHeight);
-    });
-    if (layout.statsText) {
-        ctx.fillText(layout.statsText, contentLeft, contentTop + layout.statsOffset);
+    for (let x = 16; x < width; x += 16) {
+        for (let y = 16; y < height; y += 16) {
+            context.globalAlpha = (x + y) % 64 === 0 ? 0.32 : 0.14;
+            context.beginPath();
+            context.arc(x, y, 1, 0, Math.PI * 2);
+            context.fill();
+        }
     }
-    ctx.textBaseline = 'alphabetic';
+
+    context.restore();
+}
+
+function drawHeader(context, x, y, width, height) {
+    drawRoundRect(context, x, y, width, height, 20);
+    context.fillStyle = shareTheme.surface;
+    context.fill();
+    context.strokeStyle = shareTheme.borderStrong;
+    context.lineWidth = 1;
+    context.stroke();
+
+    const titleWidth = width - 330;
+    drawTinyLabel(context, x + 28, y + 28, '[ BIFF CALENDAR / NOTHING SHARE ]', shareTheme.secondary);
+    drawSignal(context, x + width - 40, y + 36);
+
+    context.fillStyle = shareTheme.ink;
+    context.font = '700 92px "Doto", "Space Mono", monospace';
+    context.textBaseline = 'top';
+    context.fillText('BIFF', x + 24, y + 60);
+
+    context.font = '500 44px "Space Grotesk", sans-serif';
+    context.fillText('CALENDAR', x + 24, y + 150);
+
+    context.fillStyle = shareTheme.text;
+    context.font = '500 28px "Space Grotesk", sans-serif';
+    context.fillText(`${shareConfig.userName} / 2026 WATCHLIST`, x + 28, y + 204);
+
+    context.fillStyle = shareTheme.secondary;
+    context.font = '400 18px "Space Grotesk", sans-serif';
+    context.fillText(fitText(context, getDateRangeText(), titleWidth, '400 18px "Space Grotesk", sans-serif'), x + 28, y + 234);
+
+    const statsX = x + width - 276;
+    const statsY = y + 28;
+    const statsWidth = 220;
+    const statsHeight = 56;
+    const stats = getStats();
+
+    drawStatBox(context, statsX, statsY, statsWidth, statsHeight, 'FILMS', String(state.selectedMovies.size).padStart(2, '0'));
+    drawStatBox(context, statsX, statsY + 68, statsWidth, statsHeight, 'TIME', stats.duration);
+    drawStatBox(context, statsX, statsY + 136, statsWidth, statsHeight, 'COST', stats.price);
+}
+
+function drawStatBox(context, x, y, width, height, label, value) {
+    drawRoundRect(context, x, y, width, height, 14);
+    context.fillStyle = shareTheme.surfaceRaised;
+    context.fill();
+    context.strokeStyle = shareTheme.border;
+    context.lineWidth = 1;
+    context.stroke();
+
+    drawTinyLabel(context, x + 16, y + 14, label, shareTheme.secondary);
+    context.fillStyle = shareTheme.ink;
+    context.font = '700 22px "Space Mono", monospace';
+    context.textBaseline = 'alphabetic';
+    context.fillText(value, x + 16, y + 42);
+}
+
+function drawDateHeader(context, x, y, width, height, date) {
+    drawRoundRect(context, x, y, width, height, 14);
+    context.fillStyle = shareTheme.ink;
+    context.fill();
+
+    context.fillStyle = shareTheme.bg;
+    context.font = '700 22px "Space Mono", monospace';
+    context.textBaseline = 'middle';
+    context.fillText(date, x + 20, y + height / 2);
+}
+
+function drawMovieCard(context, x, y, width, height, movie) {
+    drawRoundRect(context, x, y, width, height, 18);
+    context.fillStyle = shareTheme.surface;
+    context.fill();
+    context.strokeStyle = movie['见面会'] === '★' ? shareTheme.warning : shareTheme.borderStrong;
+    context.lineWidth = 1;
+    context.stroke();
+
+    const timeBlockWidth = 178;
+    const contentX = x + timeBlockWidth + 34;
+    const contentWidth = width - timeBlockWidth - 58;
+    const time = getMovieTime(movie) || '00:00';
+    const duration = parseDuration(movie['时长']);
+    const [startHour, startMinute] = time.split(':').map(Number);
+    const endTime = calculateEndTime(startHour, startMinute, duration);
+
+    drawRoundRect(context, x + 20, y + 20, timeBlockWidth - 12, height - 40, 14);
+    context.fillStyle = shareTheme.ink;
+    context.fill();
+
+    drawTinyLabel(context, x + 40, y + 36, 'START', '#999999');
+    context.fillStyle = shareTheme.bg;
+    context.font = '700 34px "Space Mono", monospace';
+    context.textBaseline = 'alphabetic';
+    context.fillText(time, x + 40, y + 86);
+    drawTinyLabel(context, x + 40, y + 110, 'END', '#999999');
+    context.fillStyle = shareTheme.bg;
+    context.font = '500 24px "Space Mono", monospace';
+    context.fillText(endTime, x + 40, y + 146);
+
+    const titleLines = wrapText(context, movie['中文片名'] || '', contentWidth, '700 34px "Space Grotesk", sans-serif', 2);
+    context.fillStyle = shareTheme.ink;
+    context.font = '700 34px "Space Grotesk", sans-serif';
+    context.textBaseline = 'top';
+    titleLines.forEach((line, index) => {
+        context.fillText(line, contentX, y + 24 + index * 38);
+    });
+
+    const subtitle = movie['英文片名'] || '';
+    if (subtitle) {
+        drawTinyLabel(
+            context,
+            contentX,
+            y + 24 + titleLines.length * 38 + 6,
+            fitText(context, subtitle, contentWidth, '400 14px "Space Mono", monospace'),
+            shareTheme.secondary
+        );
+    }
+
+    const metaStartY = y + 24 + Math.max(84, titleLines.length * 38 + (subtitle ? 28 : 0));
+    const metaRows = buildMetaRows(movie);
+    metaRows.forEach((row, index) => {
+        const rowY = metaStartY + index * 24;
+        drawTinyLabel(context, contentX, rowY, row.label, shareTheme.secondary);
+        context.fillStyle = row.color || shareTheme.text;
+        context.font = row.font || '400 16px "Space Grotesk", sans-serif';
+        context.textBaseline = 'top';
+        context.fillText(fitText(context, row.value, contentWidth - 86, row.font || '400 16px "Space Grotesk", sans-serif'), contentX + 88, rowY - 2);
+    });
 
     if (movie['见面会'] === '★') {
-        const bx = x + w - outerPadX - badgeW;
-        const by = y + (h - 44) / 2;
-        ctx.fillStyle = '#fbbf24';
-        drawRoundRect(ctx, bx, by, badgeW, 44, 22);
-        ctx.fill();
-        ctx.font = '700 16px -apple-system, "Helvetica Neue", Arial, sans-serif';
-        ctx.fillStyle = '#000';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('见面会', bx + badgeW / 2, by + 24);
-        ctx.textAlign = 'left';
-        ctx.textBaseline = 'alphabetic';
+        const badgeWidth = 112;
+        drawRoundRect(context, x + width - badgeWidth - 20, y + 20, badgeWidth, 34, 17);
+        context.fillStyle = shareTheme.warning;
+        context.fill();
+        context.fillStyle = shareTheme.ink;
+        context.font = '700 13px "Space Mono", monospace';
+        context.textBaseline = 'middle';
+        context.textAlign = 'center';
+        context.fillText('SPECIAL TALK', x + width - badgeWidth / 2 - 20, y + 37);
+        context.textAlign = 'left';
     }
-    ctx.restore();
 }
 
-function getCardHeight(ctx, movie) {
-    const badgeW = movie['见面会'] === '★' ? 100 : 0;
-    const contentMaxW = Math.max(160, 750 - 80 - 24 - 154 - 22 - 24 - badgeW - (badgeW ? 16 : 0));
-    const layout = measureCardLayout(ctx, movie, contentMaxW);
-    const outerPadY = 20;
-    const timePillH = 76;
-    return Math.ceil(Math.max(timePillH, layout.totalHeight) + outerPadY * 2);
-}
-
-function wrapText(ctx, text, maxWidth, font, maxLines = 2) {
-    if (!text) return [];
-
-    ctx.save();
-    ctx.font = font;
-
-    const chars = Array.from(text);
-    const lines = [];
-    let current = '';
-    let index = 0;
-
-    while (index < chars.length && lines.length < maxLines) {
-        const char = chars[index];
-        const next = current + char;
-
-        if (ctx.measureText(next).width <= maxWidth || current.length === 0) {
-            current = next;
-            index += 1;
-            continue;
-        }
-
-        if (lines.length === maxLines - 1) break;
-        lines.push(current);
-        current = '';
-    }
-
-    if (lines.length < maxLines && current) {
-        let lastLine = current + chars.slice(index).join('');
-        if (ctx.measureText(lastLine).width <= maxWidth) {
-            lines.push(lastLine);
-        } else {
-            while (lastLine.length > 0 && ctx.measureText(lastLine + '...').width > maxWidth) {
-                lastLine = lastLine.slice(0, -1);
-            }
-            lines.push(lastLine ? lastLine + '...' : '...');
-        }
-    }
-
-    ctx.restore();
-    return lines.slice(0, maxLines);
-}
-
-function measureCardLayout(ctx, movie, contentMaxW) {
-    const titleLineHeight = 28;
-    const cinemaLineHeight = 22;
-    const metaLineHeight = 20;
-    const statsLineHeight = 20;
-    const titleLines = wrapText(ctx, movie['中文片名'] || '', contentMaxW, '700 28px -apple-system, "Helvetica Neue", Arial, sans-serif', 2);
-    const cinemaLines = shareConfig.showCinemaInfo
-        ? buildCinemaLines(ctx, movie, contentMaxW)
-        : [];
-    const metaParts = [movie['导演']].filter(Boolean);
-    const metaLines = wrapText(ctx, metaParts.join(' | '), contentMaxW, '400 16px -apple-system, "Helvetica Neue", Arial, sans-serif', 2);
-    const statsParts = [movie['时长']];
-    if (shareConfig.showPriceInfo && movie['票价']) statsParts.push(`${movie['票价']}元`);
-
-    const titleHeight = titleLines.length * titleLineHeight;
-    const cinemaHeight = cinemaLines.length * cinemaLineHeight;
-    const metaHeight = metaLines.length * metaLineHeight;
-    const hasStats = statsParts.filter(Boolean).length > 0;
-    const statsText = hasStats ? statsParts.filter(Boolean).join(' | ') : '';
-
-    let cursor = 0;
-    const cinemaOffset = titleHeight > 0 && cinemaHeight > 0 ? titleHeight + 8 : titleHeight;
-    cursor = titleHeight;
-    if (cinemaHeight > 0) cursor += 8 + cinemaHeight;
-    const metaOffset = cursor + (metaHeight > 0 && cursor > 0 ? 8 : 0);
-    if (metaHeight > 0) cursor = metaOffset + metaHeight;
-    const statsOffset = cursor + (statsText && cursor > 0 ? 8 : 0);
-    const totalHeight = statsText ? statsOffset + statsLineHeight : cursor;
-
-    return {
-        titleLines,
-        cinemaLines,
-        metaLines,
-        statsText,
-        titleHeight,
-        cinemaHeight,
-        metaHeight,
-        totalHeight,
-        titleLineHeight,
-        cinemaLineHeight,
-        metaLineHeight,
-        cinemaOffset,
-        metaOffset,
-        statsOffset,
-    };
-}
-
-function buildCinemaLines(ctx, movie, maxWidth) {
-    const cinema = String(movie['影院'] || '').trim();
-    const hall = String(movie['影厅'] || '').trim();
-    const font = '600 18px -apple-system, "Helvetica Neue", Arial, sans-serif';
-
-    if (!cinema && !hall) return [];
-    if (cinema && hall) {
-        const combined = `${cinema} · ${hall}`;
-        ctx.save();
-        ctx.font = font;
-        const fitsOneLine = ctx.measureText(combined).width <= maxWidth;
-        ctx.restore();
-        if (fitsOneLine) return [combined];
-
-        const hallLines = wrapText(ctx, hall, maxWidth, font, 2);
-        return [fitSingleLineText(ctx, cinema, maxWidth, font), ...hallLines].slice(0, 3);
-    }
-
-    return wrapText(ctx, cinema || hall, maxWidth, font, 3);
-}
-
-function fitSingleLineText(ctx, text, maxWidth, font) {
-    if (!text) return '';
-
-    ctx.save();
-    ctx.font = font;
-
-    if (ctx.measureText(text).width <= maxWidth) {
-        ctx.restore();
-        return text;
-    }
-
-    let result = text;
-    while (result.length > 0 && ctx.measureText(result + '...').width > maxWidth) {
-        result = result.slice(0, -1);
-    }
-
-    ctx.restore();
-    return result ? `${result}...` : '';
-}
-
-function drawHeaderContent(ctx, { x, y, w, h, title, subtitle, range, stats }) {
-    const items = [
+function buildMetaRows(movie) {
+    const rows = [
         {
-            text: fitSingleLineText(ctx, title, w, '700 46px -apple-system, "Helvetica Neue", Arial, sans-serif'),
-            font: '700 46px -apple-system, "Helvetica Neue", Arial, sans-serif',
-            color: '#fff',
-            lineHeight: 54,
-            shadow: true,
+            label: 'VENUE',
+            value: [movie['影院'], shareConfig.showCinemaInfo ? movie['影厅'] : ''].filter(Boolean).join(' / '),
         },
         {
-            text: fitSingleLineText(ctx, subtitle, w, '400 20px -apple-system, "Helvetica Neue", Arial, sans-serif'),
-            font: '400 20px -apple-system, "Helvetica Neue", Arial, sans-serif',
-            color: 'rgba(255,255,255,0.9)',
-            lineHeight: 26,
+            label: 'INFO',
+            value: buildInfoLine(movie),
+            font: '400 15px "Space Mono", monospace',
+            color: shareTheme.secondary,
         },
-        range ? {
-            text: fitSingleLineText(ctx, range, w, '400 20px -apple-system, "Helvetica Neue", Arial, sans-serif'),
-            font: '400 20px -apple-system, "Helvetica Neue", Arial, sans-serif',
-            color: 'rgba(255,255,255,0.9)',
-            lineHeight: 26,
-        } : null,
-        stats ? {
-            text: fitSingleLineText(ctx, stats, w, '600 18px -apple-system, "Helvetica Neue", Arial, sans-serif'),
-            font: '600 18px -apple-system, "Helvetica Neue", Arial, sans-serif',
-            color: 'rgba(255,255,255,0.78)',
-            lineHeight: 24,
-        } : null,
-    ].filter(Boolean);
+    ];
 
-    const totalHeight = items.reduce((sum, item) => sum + item.lineHeight, 0);
-    let cursorY = y + (h - totalHeight) / 2;
+    if (movie['导演']) {
+        rows.splice(1, 0, {
+            label: 'DIRECTOR',
+            value: movie['导演'],
+        });
+    }
 
-    items.forEach((item) => {
-        ctx.save();
-        ctx.font = item.font;
-        ctx.fillStyle = item.color;
-        ctx.textBaseline = 'top';
-        if (item.shadow) {
-            ctx.shadowColor = 'rgba(0,0,0,0.2)';
-            ctx.shadowBlur = 8;
-        }
-        ctx.fillText(item.text, x, cursorY);
-        ctx.restore();
-        cursorY += item.lineHeight;
-    });
+    if (shareConfig.showCinemaInfo && movie['影院地址']) {
+        rows.push({
+            label: 'ADDR',
+            value: movie['影院地址'],
+            font: '400 14px "Space Grotesk", sans-serif',
+            color: shareTheme.secondary,
+        });
+    }
+
+    return rows;
 }
 
-function getShareStats() {
+function buildInfoLine(movie) {
+    const parts = [];
+    if (movie['时长']) parts.push(movie['时长']);
+    if (movie['票价'] && shareConfig.showPriceInfo) parts.push(`${movie['票价']}元`);
+    if (movie['单元']) parts.push(movie['单元']);
+    return parts.join(' / ') || 'N/A';
+}
+
+function getCardHeight(context, movie, width) {
+    const contentWidth = width - 178 - 58;
+    const titleLines = wrapText(context, movie['中文片名'] || '', contentWidth, '700 34px "Space Grotesk", sans-serif', 2);
+    const subtitleHeight = movie['英文片名'] ? 28 : 0;
+    const baseMetaRows = 3 + (shareConfig.showCinemaInfo && movie['影院地址'] ? 1 : 0);
+    const contentHeight = 24 + titleLines.length * 38 + subtitleHeight + 14 + baseMetaRows * 24 + 24;
+    return Math.max(188, contentHeight);
+}
+
+function getDateRangeText() {
+    const dates = Array.from(groupMoviesByDate().keys());
+    if (dates.length === 0) return 'NO DATE';
+    return dates.length === 1 ? dates[0] : `${dates[0]} - ${dates[dates.length - 1]}`;
+}
+
+function getStats() {
     let totalMinutes = 0;
     let totalPrice = 0;
 
     for (const movie of state.selectedMovies.values()) {
-        totalMinutes += Math.round(parseDuration(movie['时长']) / (60 * 1000));
+        totalMinutes += Math.round(parseDuration(movie['时长']) / 60000);
         const numericPrice = parsePrice(movie['票价']);
         if (numericPrice != null) totalPrice += numericPrice;
     }
 
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-    const durationText = hours > 0 ? `总时长 ${hours}小时${minutes ? `${minutes}分钟` : ''}` : `总时长 ${minutes}分钟`;
-    if (!shareConfig.showPriceInfo) return durationText;
 
-    const priceText = totalPrice > 0 ? `总票价 ${totalPrice}元` : '总票价 待定';
-    return `${durationText} · ${priceText}`;
+    return {
+        duration: hours > 0 ? `${hours}H ${String(minutes).padStart(2, '0')}M` : `${minutes}M`,
+        price: shareConfig.showPriceInfo ? (totalPrice > 0 ? `${totalPrice} CNY` : 'TBD') : 'HIDDEN',
+    };
 }
 
 function parsePrice(value) {
     if (value == null || value === '') return null;
     const match = String(value).match(/(\d+(?:\.\d+)?)/);
     return match ? Number(match[1]) : null;
+}
+
+function drawFooter(context, x, y, width, height) {
+    context.strokeStyle = shareTheme.borderStrong;
+    context.lineWidth = 1;
+    context.beginPath();
+    context.moveTo(x, y + 12);
+    context.lineTo(x + width, y + 12);
+    context.stroke();
+
+    drawTinyLabel(context, x, y + 28, 'BIFF CALENDAR / GENERATED BY LIN0U0', shareTheme.secondary);
+    context.fillStyle = shareTheme.secondary;
+    context.font = '400 16px "Space Grotesk", sans-serif';
+    context.textBaseline = 'top';
+    context.fillText('Personal scheduling reference. Official program always prevails.', x, y + 48);
+}
+
+function drawTinyLabel(context, x, y, text, color) {
+    context.fillStyle = color;
+    context.font = '700 12px "Space Mono", monospace';
+    context.textBaseline = 'top';
+    context.fillText(text, x, y);
+}
+
+function drawSignal(context, x, y) {
+    context.save();
+    context.fillStyle = shareTheme.accent;
+    context.beginPath();
+    context.arc(x, y, 6, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+}
+
+function wrapText(context, text, maxWidth, font, maxLines) {
+    if (!text) return [];
+
+    context.save();
+    context.font = font;
+
+    const chars = Array.from(String(text));
+    const lines = [];
+    let current = '';
+    let index = 0;
+
+    while (index < chars.length && lines.length < maxLines) {
+        const char = chars[index];
+        const nextLine = current + char;
+        if (context.measureText(nextLine).width <= maxWidth || current.length === 0) {
+            current = nextLine;
+            index += 1;
+            continue;
+        }
+
+        lines.push(current);
+        current = char;
+        index += 1;
+    }
+
+    if (current && lines.length < maxLines) {
+        const remainder = current + chars.slice(index).join('');
+        lines.push(fitText(context, remainder, maxWidth, font));
+    }
+
+    context.restore();
+    return lines.slice(0, maxLines);
+}
+
+function fitText(context, text, maxWidth, font) {
+    context.save();
+    context.font = font;
+
+    if (context.measureText(text).width <= maxWidth) {
+        context.restore();
+        return text;
+    }
+
+    let result = String(text || '');
+    while (result.length > 0 && context.measureText(`${result}...`).width > maxWidth) {
+        result = result.slice(0, -1);
+    }
+
+    context.restore();
+    return result ? `${result}...` : '...';
 }
 
 function getShareControlsHTML() {
@@ -463,16 +460,13 @@ function bindShareControls() {
 
     showCinema.addEventListener('change', () => {
         shareConfig.showCinemaInfo = showCinema.checked;
-        rerenderSharePreview();
+        renderSharePreview();
     });
+
     showPrice.addEventListener('change', () => {
         shareConfig.showPriceInfo = showPrice.checked;
-        rerenderSharePreview();
+        renderSharePreview();
     });
-}
-
-function rerenderSharePreview() {
-    render(shareConfig.userName);
 }
 
 export function closeShareModal() {

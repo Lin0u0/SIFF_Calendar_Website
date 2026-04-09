@@ -1,18 +1,20 @@
 import { state } from './state.js';
 import { checkTimeConflict } from './selection.js';
-import { getMovieDate, getMovieTime } from './utils.js';
+import { getMovieDate, getMovieTime, parseDateTime, parseDuration } from './utils.js';
 
 export function displayMovies() {
     const grid = document.getElementById('movieGrid');
     const countEl = document.getElementById('resultCount');
-    countEl.textContent = state.filteredData.length;
+    const movies = sortMovies(state.filteredData);
+    countEl.textContent = movies.length;
 
-    if (state.filteredData.length === 0) {
+    if (movies.length === 0) {
         grid.innerHTML = '<div class="empty-state">没有找到符合条件的放映场次</div>';
+        window._app?.refreshDashboard?.();
         return;
     }
 
-    grid.innerHTML = state.filteredData.map(movie => {
+    grid.innerHTML = movies.map(movie => {
         const isSelected = state.selectedMovies.has(movie.id);
         const hasConflict = checkTimeConflict(movie);
         const displayDate = getMovieDate(movie);
@@ -28,6 +30,9 @@ export function displayMovies() {
         const meetBadge = movie['见面会'] === '★'
             ? `<span class="badge badge-meet">${movie['活动信息'] || '见面会'}</span>`
             : '';
+        const unitBadge = movie['单元']
+            ? `<span class="badge badge-unit">${movie['单元']}</span>`
+            : '';
 
         return `
             <div class="card ${isSelected ? 'selected' : ''} ${hasConflict && isSelected ? 'conflict' : ''}"
@@ -37,7 +42,6 @@ export function displayMovies() {
                         <h3 class="card-title">${movie['中文片名']}</h3>
                         ${movie['英文片名'] ? `<p class="card-subtitle">${movie['英文片名']}</p>` : ''}
                     </div>
-                    <span class="badge badge-unit">${movie['单元']}</span>
                 </div>
 
                     ${details.length ? `
@@ -47,6 +51,7 @@ export function displayMovies() {
 
                 <div class="card-screening">
                     <div class="card-badges">
+                        ${unitBadge}
                         <span class="badge badge-date">${displayDate}</span>
                         <span class="badge badge-time">${displayTime}</span>
                         ${meetBadge}
@@ -65,4 +70,40 @@ export function displayMovies() {
             </div>
         `;
     }).join('');
+
+    window._app?.refreshDashboard?.();
+}
+
+function sortMovies(movies) {
+    const sorted = [...movies];
+
+    sorted.sort((leftMovie, rightMovie) => {
+        switch (state.sortOrder) {
+        case 'date-desc':
+            return compareDate(rightMovie, leftMovie);
+        case 'title-asc':
+            return compareText(leftMovie['中文片名'], rightMovie['中文片名']) ||
+                compareDate(leftMovie, rightMovie);
+        case 'cinema-asc':
+            return compareText(leftMovie['影院'], rightMovie['影院']) ||
+                compareDate(leftMovie, rightMovie);
+        case 'duration-desc':
+            return parseDuration(rightMovie['时长']) - parseDuration(leftMovie['时长']) ||
+                compareDate(leftMovie, rightMovie);
+        case 'date-asc':
+        default:
+            return compareDate(leftMovie, rightMovie);
+        }
+    });
+
+    return sorted;
+}
+
+function compareDate(leftMovie, rightMovie) {
+    return parseDateTime(getMovieDate(leftMovie), getMovieTime(leftMovie)) -
+        parseDateTime(getMovieDate(rightMovie), getMovieTime(rightMovie));
+}
+
+function compareText(leftText, rightText) {
+    return String(leftText || '').localeCompare(String(rightText || ''), 'zh-Hans-CN');
 }

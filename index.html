@@ -3,21 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>电影节排片工具</title>
-    <link rel="stylesheet" href="style.css?v=3">
+    <title>BIFF Calendar</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Doto:wght@400..900&family=Space+Grotesk:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=5">
     <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
 <header class="header">
+    <div class="header-topbar">
+        <p class="topbar-label">[ BIFF CALENDAR / NOTHING EDITION ]</p>
+        <button class="theme-toggle" id="themeToggle" type="button" aria-label="切换明暗主题">
+            <span class="theme-toggle-label">MODE</span>
+            <span class="theme-toggle-value" id="themeToggleText">LIGHT</span>
+        </button>
+    </div>
     <div class="header-inner">
-        <h1>Film<span>Fest</span></h1>
-        <p class="header-sub">电影节快速排片工具</p>
+        <div class="hero-copy">
+            <p class="hero-kicker">FILM SCHEDULE / BEIJING INTERNATIONAL FILM FESTIVAL 2026</p>
+            <h1><span>BIFF</span> CALENDAR</h1>
+            <p class="header-sub">上传排片表，快速筛选场次，建立你自己的电影节时间轴。</p>
+        </div>
     </div>
 </header>
 
 <!-- Upload -->
-<section class="section" id="uploadSection">
+<section class="section upload-section" id="uploadSection">
+    <div class="section-head">
+        <p class="section-kicker">INPUT / DATA SOURCE</p>
+        <p class="section-note">支持拖拽导入与本地缓存恢复。建议使用官方完整排片表。</p>
+    </div>
     <div class="upload-area" id="uploadArea">
         <div class="upload-icon">
             <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -40,103 +58,153 @@
 
         <!-- Left: Filters + Results -->
         <div class="panel-left">
-            <!-- Filters -->
-            <div class="filter-bar">
-                <div class="filter-row">
-                    <div class="filter-group">
-                        <label>单元</label>
-                        <select id="unitFilter"><option value="">全部</option></select>
+            <section class="command-hub">
+                <div class="results-bar">
+                    <div class="results-copy">
+                        <span class="results-label">VISIBLE MATCHES</span>
+                        <span class="results-value"><strong id="resultCount">0</strong><span class="results-unit">场放映</span></span>
                     </div>
-                    <div class="filter-group">
-                        <label>日期</label>
-                        <div class="multi-select-container">
-                            <div class="multi-select-trigger" onclick="window._app.toggleDateDropdown(event)">
-                                <span id="dateFilterText">全部日期</span>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                    <div class="results-controls">
+                        <label class="result-sort">
+                            <span class="result-sort-label">SORT</span>
+                            <div class="select-shell control-shell">
+                                <select id="sortOrder">
+                                    <option value="date-asc">时间 / 升序</option>
+                                    <option value="date-desc">时间 / 降序</option>
+                                    <option value="title-asc">片名 / 升序</option>
+                                    <option value="cinema-asc">影院 / 升序</option>
+                                    <option value="duration-desc">时长 / 长到短</option>
+                                </select>
+                                <svg class="select-shell-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
                             </div>
-                            <div class="multi-select-dropdown" id="dateDropdown">
-                                <div class="ms-search">
-                                    <input type="text" placeholder="搜索日期..." onkeyup="window._app.filterDateOptions(this.value)">
-                                </div>
-                                <div class="ms-quick">
-                                    <button onclick="window._app.selectWeekend()">周末</button>
-                                    <button onclick="window._app.selectWeekdays()">工作日</button>
-                                </div>
-                                <div class="ms-options" id="dateOptions">
-                                    <label class="multi-select-option">
-                                        <input type="checkbox" value="all" onchange="window._app.toggleAllDates(this)">
-                                        <span>全选</span>
-                                    </label>
-                                </div>
-                                <div class="ms-actions">
-                                    <button class="btn btn-primary btn-sm" onclick="window._app.applyDateFilter()">确定</button>
-                                    <button class="btn btn-ghost btn-sm" onclick="window._app.clearDateFilter()">清空</button>
-                                </div>
+                        </label>
+                        <div class="results-search">
+                            <label class="results-search-label" for="movieNameFilter">SEARCH</label>
+                            <div class="input-shell control-shell">
+                                <input type="text" id="movieNameFilter" placeholder="按中文或英文片名实时搜索">
                             </div>
                         </div>
                     </div>
-                    <div class="filter-group">
-                        <label>影院</label>
-                        <select id="cinemaFilter"><option value="">全部</option></select>
-                    </div>
-                    <div class="filter-group">
-                        <label>片名</label>
-                        <input type="text" id="movieNameFilter" placeholder="中文或英文">
-                    </div>
                 </div>
-                <div class="filter-row">
-                    <div class="filter-group">
-                        <label>导演</label>
-                        <input type="text" id="directorFilter" placeholder="导演名称">
-                    </div>
-                    <div class="filter-group">
-                        <label>国家/地区</label>
-                        <select id="countryFilter"><option value="">全部</option></select>
-                    </div>
-                    <div class="filter-group">
-                        <label>活动</label>
-                        <select id="meetFilter">
-                            <option value="">全部</option>
-                            <option value="yes">有活动</option>
-                            <option value="no">无活动</option>
-                        </select>
-                    </div>
-                    <div class="filter-group filter-actions">
-                        <button class="btn btn-primary" onclick="window._app.applyFilters()">筛选</button>
-                        <button class="btn btn-ghost" onclick="window._app.resetFilters()">重置</button>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Results -->
-            <div class="results-bar">
-                <span>共 <strong id="resultCount">0</strong> 场放映</span>
-            </div>
+                <div class="filter-bar">
+                    <div class="panel-intro">
+                        <p class="panel-kicker">FILTER MATRIX</p>
+                        <button class="btn btn-ghost btn-sm btn-reset-inline" type="button" onclick="window._app.resetFilters()">RESET</button>
+                    </div>
+                    <div class="filter-row filter-row-primary">
+                        <div class="filter-group">
+                            <label>单元</label>
+                            <div class="select-shell control-shell">
+                                <select id="unitFilter"><option value="">全部</option></select>
+                                <svg class="select-shell-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>日期</label>
+                            <div class="multi-select-container control-shell">
+                                <button class="multi-select-trigger" type="button" onclick="window._app.toggleDateDropdown(event)" aria-haspopup="listbox" aria-expanded="false" aria-controls="dateDropdown">
+                                    <span id="dateFilterText">全部日期</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                                </button>
+                                <div class="multi-select-dropdown" id="dateDropdown">
+                                    <div class="ms-search">
+                                        <input type="text" placeholder="搜索日期..." onkeyup="window._app.filterDateOptions(this.value)">
+                                    </div>
+                                    <div class="ms-quick">
+                                        <button type="button" onclick="window._app.selectWeekend()">周末</button>
+                                        <button type="button" onclick="window._app.selectWeekdays()">工作日</button>
+                                    </div>
+                                    <div class="ms-options" id="dateOptions">
+                                        <label class="multi-select-option">
+                                            <input type="checkbox" value="all" onchange="window._app.toggleAllDates(this)">
+                                            <span class="multi-select-check" aria-hidden="true"></span>
+                                            <span class="multi-select-label">全选</span>
+                                        </label>
+                                    </div>
+                                    <div class="ms-actions">
+                                        <button class="btn btn-primary btn-sm" onclick="window._app.applyDateFilter()">完成</button>
+                                        <button class="btn btn-ghost btn-sm" onclick="window._app.clearAndApplyDateFilter()">清空</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>影院</label>
+                            <div class="select-shell control-shell">
+                                <select id="cinemaFilter"><option value="">全部</option></select>
+                                <svg class="select-shell-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>活动</label>
+                            <div class="select-shell control-shell">
+                                <select id="meetFilter">
+                                    <option value="">全部</option>
+                                    <option value="yes">有活动</option>
+                                    <option value="no">无活动</option>
+                                </select>
+                                <svg class="select-shell-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-row filter-row-secondary">
+                        <div class="filter-group">
+                            <label>导演</label>
+                            <div class="input-shell control-shell">
+                                <input type="text" id="directorFilter" placeholder="导演名称">
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>国家/地区</label>
+                            <div class="select-shell control-shell">
+                                <select id="countryFilter"><option value="">全部</option></select>
+                                <svg class="select-shell-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
             <div class="movie-grid" id="movieGrid"></div>
         </div>
 
         <!-- Right: Selection Panel -->
         <aside class="panel-right">
-            <div class="panel-sticky">
+            <div class="panel-sticky" id="selectionSheet">
+                <div class="mobile-sheet-handle" aria-hidden="true"></div>
                 <div class="panel-header">
-                    <h2>已选电影</h2>
-                    <span class="count-badge" id="selectionCount">0</span>
+                    <div>
+                        <p class="panel-kicker">WATCHLIST</p>
+                        <h2>已选电影</h2>
+                    </div>
+                    <div class="panel-header-actions">
+                        <span class="count-badge" id="selectionCount">0</span>
+                        <button class="panel-header-io" type="button" onclick="window._app.showPlanTransferHub()">[ I/O ]</button>
+                    </div>
                 </div>
                 <div class="sel-list" id="selectedMovies">
                     <div class="empty-state">暂未选择任何电影</div>
                 </div>
                 <div class="panel-actions">
                     <button class="btn btn-primary" onclick="window._app.generateCalendar()">日历视图</button>
-                    <button class="btn btn-accent" onclick="window._app.exportSelection()">导出</button>
                     <button class="btn btn-outline" onclick="window._app.generateShareImage()">分享图片</button>
-                    <button class="btn btn-ghost" onclick="window._app.showImportOptions()">导入</button>
                     <button class="btn btn-danger-ghost" onclick="window._app.clearSelection()">清空</button>
+                </div>
+                <div class="panel-utility-row">
+                    <span class="panel-utility-label">PLAN I/O</span>
+                    <button class="panel-utility-trigger" type="button" onclick="window._app.showPlanTransferHub()">[ OPEN ]</button>
                 </div>
             </div>
         </aside>
 
     </div>
 </main>
+
+<button class="mobile-selection-toggle" id="mobileSelectionToggle" type="button" onclick="window._app.toggleMobileSelectionSheet()" aria-controls="selectionSheet" aria-expanded="false">
+    <span class="mobile-selection-label">已选排片</span>
+    <span class="mobile-selection-count" id="mobileSelectionCount">0</span>
+</button>
+<div class="mobile-selection-backdrop" id="mobileSelectionBackdrop" onclick="window._app.closeMobileSelectionSheet()" aria-hidden="true"></div>
 
 <!-- Calendar Modal -->
 <div class="modal-overlay" id="calendarModal">
@@ -158,7 +226,7 @@
 <div class="modal-overlay export-modal" id="exportModal">
     <div class="modal-box">
         <div class="modal-header">
-            <h2>导出观影计划</h2>
+            <h2 id="exportModalTitle">计划管理</h2>
             <button class="btn-close" onclick="window._app.closeExportModal()">&times;</button>
         </div>
         <div id="exportModalBody"></div>
@@ -177,7 +245,7 @@
 </div>
 
 <footer class="footer">
-    <p>&copy; Lin0u0 &middot; 本系统仅供个人排片参考，具体信息以官方发布为准</p>
+    <p>BIFF CALENDAR / PERSONAL SCHEDULING TOOL / 具体信息请以官方发布为准</p>
 </footer>
 
 <script type="module" src="js/app.js"></script>

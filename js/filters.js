@@ -2,6 +2,8 @@ import { state, persistState } from './state.js';
 import { parseDateTime, getMovieDate } from './utils.js';
 import { displayMovies } from './display.js';
 
+const customSelectIds = ['sortOrder', 'unitFilter', 'cinemaFilter', 'meetFilter', 'countryFilter'];
+
 export function initializeFilters() {
     const units = [...new Set(state.moviesData.map(m => m['单元']).filter(Boolean))].sort();
     const dates = [...new Set(state.moviesData.map(m => getMovieDate(m)).filter(Boolean))].sort((a, b) => {
@@ -21,8 +23,15 @@ export function initializeFilters() {
     // Hide inapplicable filters
     const hasDirector = state.moviesData.some(m => m['导演']);
     const hasCountry = countries.length > 0;
-    document.getElementById('directorFilter').closest('.filter-group').style.display = hasDirector ? '' : 'none';
-    document.getElementById('countryFilter').closest('.filter-group').style.display = hasCountry ? '' : 'none';
+    const directorGroup = document.getElementById('directorFilter').closest('.filter-group');
+    const countryGroup = document.getElementById('countryFilter').closest('.filter-group');
+    const secondaryRow = document.querySelector('.filter-row-secondary');
+
+    directorGroup.style.display = hasDirector ? '' : 'none';
+    countryGroup.style.display = hasCountry ? '' : 'none';
+    if (secondaryRow) secondaryRow.style.display = hasDirector || hasCountry ? '' : 'none';
+
+    initializeCustomSelects();
 }
 
 function populateSelect(selectId, options) {
@@ -34,6 +43,8 @@ function populateSelect(selectId, options) {
         el.textContent = opt;
         select.appendChild(el);
     });
+
+    syncCustomSelect(select);
 }
 
 function populateDateMultiSelect(dates) {
@@ -42,7 +53,8 @@ function populateDateMultiSelect(dates) {
     const optionsHTML = dates.map(date => `
         <label class="multi-select-option" data-value="${date}">
             <input type="checkbox" value="${date}" onchange="window._app.updateDateSelection()">
-            <span>${date}</span>
+            <span class="multi-select-check" aria-hidden="true"></span>
+            <span class="multi-select-label">${date}</span>
         </label>
     `).join('');
     dateOptions.innerHTML = allOption.outerHTML + optionsHTML;
@@ -52,22 +64,155 @@ export function toggleDateDropdown(event) {
     if (event) event.stopPropagation();
     const dropdown = document.getElementById('dateDropdown');
     const trigger = document.querySelector('.multi-select-trigger');
+    const shell = document.querySelector('.multi-select-container');
 
     if (dropdown.classList.contains('show')) {
         dropdown.classList.remove('show');
         trigger.classList.remove('active');
+        trigger.setAttribute('aria-expanded', 'false');
+        shell?.classList.remove('is-active');
+        document.removeEventListener('click', closeDateDropdownOnClickOutside);
     } else {
         dropdown.classList.add('show');
         trigger.classList.add('active');
+        trigger.setAttribute('aria-expanded', 'true');
+        shell?.classList.add('is-active');
         document.addEventListener('click', closeDateDropdownOnClickOutside);
     }
+}
+
+export function initializeCustomSelects() {
+    customSelectIds.forEach((id) => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        buildCustomSelect(select);
+        syncCustomSelect(select);
+    });
+}
+
+export function syncCustomSelect(selectOrId) {
+    const select = typeof selectOrId === 'string' ? document.getElementById(selectOrId) : selectOrId;
+    if (!select) return;
+
+    const shell = select.closest('.control-shell');
+    if (!shell) return;
+
+    const triggerLabel = shell.querySelector('.custom-select-value');
+    const options = shell.querySelectorAll('.custom-select-option');
+    const currentOption = Array.from(select.options).find((option) => option.value === select.value) || select.options[select.selectedIndex];
+
+    if (triggerLabel) {
+        triggerLabel.textContent = currentOption?.textContent || '';
+    }
+
+    options.forEach((optionButton) => {
+        const isSelected = optionButton.dataset.value === select.value;
+        optionButton.classList.toggle('selected', isSelected);
+        optionButton.setAttribute('aria-selected', String(isSelected));
+    });
+}
+
+function buildCustomSelect(select) {
+    const shell = select.closest('.control-shell');
+    if (!shell) return;
+
+    shell.classList.add('custom-select-shell');
+    select.classList.add('native-select-hidden');
+
+    const existingTrigger = shell.querySelector('.custom-select-trigger');
+    const existingDropdown = shell.querySelector('.custom-select-dropdown');
+    if (existingTrigger) existingTrigger.remove();
+    if (existingDropdown) existingDropdown.remove();
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'custom-select-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.innerHTML = `<span class="custom-select-value"></span>`;
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'custom-select-dropdown';
+    dropdown.setAttribute('role', 'listbox');
+
+    Array.from(select.options).forEach((option) => {
+        const optionButton = document.createElement('button');
+        optionButton.type = 'button';
+        optionButton.className = 'custom-select-option';
+        optionButton.dataset.value = option.value;
+        optionButton.setAttribute('role', 'option');
+        optionButton.innerHTML = `
+            <span class="custom-select-check" aria-hidden="true"></span>
+            <span class="custom-select-label">${option.textContent}</span>
+        `;
+        optionButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            if (select.value !== option.value) {
+                select.value = option.value;
+                syncCustomSelect(select);
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            } else {
+                syncCustomSelect(select);
+            }
+            closeCustomSelect(shell);
+        });
+        dropdown.appendChild(optionButton);
+    });
+
+    trigger.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const isOpen = shell.classList.contains('is-active');
+        closeAllCustomSelects();
+        if (!isOpen) openCustomSelect(shell);
+    });
+
+    shell.appendChild(trigger);
+    shell.appendChild(dropdown);
+}
+
+function openCustomSelect(shell) {
+    const trigger = shell.querySelector('.custom-select-trigger');
+    shell.classList.add('is-active');
+    shell.querySelector('.custom-select-dropdown')?.classList.add('show');
+    trigger?.setAttribute('aria-expanded', 'true');
+    document.addEventListener('click', handleGlobalCustomSelectClose);
+    document.addEventListener('keydown', handleCustomSelectEscape);
+}
+
+function closeCustomSelect(shell) {
+    const trigger = shell.querySelector('.custom-select-trigger');
+    shell.classList.remove('is-active');
+    shell.querySelector('.custom-select-dropdown')?.classList.remove('show');
+    trigger?.setAttribute('aria-expanded', 'false');
+
+    if (!document.querySelector('.custom-select-shell.is-active')) {
+        document.removeEventListener('click', handleGlobalCustomSelectClose);
+        document.removeEventListener('keydown', handleCustomSelectEscape);
+    }
+}
+
+function closeAllCustomSelects() {
+    document.querySelectorAll('.custom-select-shell.is-active').forEach((shell) => closeCustomSelect(shell));
+}
+
+function handleGlobalCustomSelectClose(event) {
+    if (!event.target.closest('.custom-select-shell')) {
+        closeAllCustomSelects();
+    }
+}
+
+function handleCustomSelectEscape(event) {
+    if (event.key === 'Escape') closeAllCustomSelects();
 }
 
 function closeDateDropdownOnClickOutside(event) {
     const container = document.querySelector('.multi-select-container');
     if (!container.contains(event.target)) {
         document.getElementById('dateDropdown').classList.remove('show');
-        document.querySelector('.multi-select-trigger').classList.remove('active');
+        const trigger = document.querySelector('.multi-select-trigger');
+        trigger.classList.remove('active');
+        trigger.setAttribute('aria-expanded', 'false');
+        container.classList.remove('is-active');
         document.removeEventListener('click', closeDateDropdownOnClickOutside);
     }
 }
@@ -125,6 +270,12 @@ export function applyDateFilter() {
     applyFilters();
 }
 
+export function clearAndApplyDateFilter() {
+    clearDateFilter();
+    toggleDateDropdown();
+    applyFilters();
+}
+
 export function clearDateFilter() {
     state.selectedDates.clear();
     document.querySelectorAll('#dateOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
@@ -169,6 +320,10 @@ export function resetFilters() {
     document.getElementById('directorFilter').value = '';
     document.getElementById('countryFilter').value = '';
     document.getElementById('meetFilter').value = '';
+    document.getElementById('sortOrder').value = 'date-asc';
+    state.sortOrder = 'date-asc';
+    ['unitFilter', 'cinemaFilter', 'meetFilter', 'countryFilter', 'sortOrder'].forEach((id) => syncCustomSelect(id));
+    persistState();
 
     state.filteredData = [...state.moviesData];
     displayMovies();

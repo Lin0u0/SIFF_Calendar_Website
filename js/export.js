@@ -1,9 +1,7 @@
 import { state, persistState } from './state.js';
 import { parseDateTime, parseDuration, formatDateToICS, formatDateForFilename, escapeICSText, getMovieDate, getMovieTime, normalizeDateTimeParts } from './utils.js';
 
-export function exportSelection() {
-    if (state.selectedMovies.size === 0) { alert('请先选择电影'); return; }
-
+function buildSelectionText() {
     const sorted = Array.from(state.selectedMovies.values()).sort((a, b) =>
         parseDateTime(getMovieDate(a), getMovieTime(a)) - parseDateTime(getMovieDate(b), getMovieTime(b))
     );
@@ -29,7 +27,21 @@ export function exportSelection() {
         if (movie['见面会'] === '★') text += `   ★ ${movie['活动信息'] || '有见面会'}\n`;
     });
 
+    return text;
+}
+
+function setExportModalTitle(title) {
+    const titleNode = document.getElementById('exportModalTitle');
+    if (titleNode) titleNode.textContent = title;
+}
+
+export function exportSelection() {
+    if (state.selectedMovies.size === 0) { alert('请先选择电影'); return; }
+    window._app?.closeMobileSelectionSheet?.();
+    const text = buildSelectionText();
+
     const body = document.getElementById('exportModalBody');
+    setExportModalTitle('导出观影计划');
     body.innerHTML = `
         <div class="export-content">
             <textarea class="export-textarea" readonly>${text}</textarea>
@@ -48,6 +60,57 @@ export function closeExportModal() {
     document.getElementById('exportModal').classList.remove('show');
 }
 
+export function showPlanTransferHub() {
+    window._app?.closeMobileSelectionSheet?.();
+    const body = document.getElementById('exportModalBody');
+    const hasSelection = state.selectedMovies.size > 0;
+
+    setExportModalTitle('计划管理');
+    body.innerHTML = `
+        <div class="transfer-hub">
+            <section class="transfer-card">
+                <div class="transfer-copy">
+                    <p class="transfer-label">EXPORT</p>
+                    <h3>导出当前计划</h3>
+                    <p>复制文本，或下载为 TXT、JSON、ICS 日历。</p>
+                </div>
+                <div class="export-actions transfer-actions">
+                    <button class="btn btn-outline" ${hasSelection ? '' : 'disabled'} onclick="window._app.copyPlanText()">复制文本</button>
+                    <button class="btn btn-outline" ${hasSelection ? '' : 'disabled'} onclick="window._app.downloadAsText()">下载 .txt</button>
+                    <button class="btn btn-outline" ${hasSelection ? '' : 'disabled'} onclick="window._app.exportSelectionAsJSON()">下载 .json</button>
+                    <button class="btn btn-accent" ${hasSelection ? '' : 'disabled'} onclick="window._app.exportToICS()">下载 .ics</button>
+                </div>
+                ${hasSelection ? '<p class="transfer-meta">已包含当前已选影片内容。</p>' : '<p class="transfer-meta">选择影片后即可导出。</p>'}
+            </section>
+            <section class="transfer-card">
+                <div class="transfer-copy">
+                    <p class="transfer-label">IMPORT</p>
+                    <h3>导入旧备份</h3>
+                    <p>从之前导出的 TXT 或 JSON 文件恢复你的选择。</p>
+                </div>
+                <div class="transfer-actions">
+                    <button type="button" class="import-option" onclick="window._app.importSelection()">
+                        <span class="import-icon">TXT</span>
+                        <div><strong>导入文本</strong><p>兼容之前导出的 .txt 文件</p></div>
+                        <span class="import-option-tail">[ LOAD ]</span>
+                    </button>
+                    <button type="button" class="import-option" onclick="window._app.importSelectionFromJSON()">
+                        <span class="import-icon">JSON</span>
+                        <div><strong>导入 JSON</strong><p>保留更多排片信息，恢复更精确</p></div>
+                        <span class="import-option-tail">[ LOAD ]</span>
+                    </button>
+                </div>
+            </section>
+        </div>`;
+
+    document.getElementById('exportModal').classList.add('show');
+}
+
+export function copyPlanText() {
+    if (state.selectedMovies.size === 0) { alert('请先选择电影'); return; }
+    navigator.clipboard.writeText(buildSelectionText()).then(() => alert('已复制到剪贴板'));
+}
+
 export function copyToClipboard() {
     const ta = document.querySelector('.export-modal.show .export-textarea');
     if (ta) {
@@ -56,7 +119,9 @@ export function copyToClipboard() {
 }
 
 export function downloadAsText() {
-    const blob = new Blob([window._exportedText], { type: 'text/plain;charset=utf-8' });
+    if (state.selectedMovies.size === 0) { alert('请先选择电影'); return; }
+    const text = window._exportedText || buildSelectionText();
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = '观影计划.txt';
@@ -136,36 +201,8 @@ export function exportToICS() {
     URL.revokeObjectURL(a.href);
 }
 
-// Import functions
 export function showImportOptions() {
-    const existingModal = document.getElementById('importModal');
-    if (existingModal) {
-        existingModal.classList.add('show');
-        return;
-    }
-
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay show';
-    modal.id = 'importModal';
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    modal.innerHTML = `
-        <div class="modal-box" style="max-width:500px">
-            <div class="modal-header">
-                <h2>导入观影计划</h2>
-                <button class="btn-close" onclick="document.getElementById('importModal').remove()">&times;</button>
-            </div>
-            <div class="import-options">
-                <button type="button" class="import-option" onclick="window._app.importSelection(); document.getElementById('importModal').remove();">
-                    <span class="import-icon">TXT</span>
-                    <div><strong>导入文本文件</strong><p>导入之前导出的 .txt 文件</p></div>
-                </button>
-                <button type="button" class="import-option" onclick="window._app.importSelectionFromJSON(); document.getElementById('importModal').remove();">
-                    <span class="import-icon">JSON</span>
-                    <div><strong>导入 JSON 文件</strong><p>导入之前导出的 .json 文件（更精确）</p></div>
-                </button>
-            </div>
-        </div>`;
-    document.body.appendChild(modal);
+    showPlanTransferHub();
 }
 
 function openImportFilePicker(accept, onFileSelected) {

@@ -70,6 +70,7 @@ export function updateSelectionPanel() {
 
     if (state.selectedMovies.size === 0) {
         container.innerHTML = '<div class="empty-state">暂未选择任何电影</div>';
+        window._app?.refreshDashboard?.();
         return;
     }
 
@@ -91,6 +92,8 @@ export function updateSelectionPanel() {
             </div>
         `;
     }).join('');
+
+    window._app?.refreshDashboard?.();
 }
 
 export function clearSelection() {

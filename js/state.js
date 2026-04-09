@@ -8,6 +8,7 @@ export const state = {
     selectedDates: new Set(),
     dataSource: null, // 'siff' | 'bjiff' | 'generic'
     sourceFileName: '',
+    sortOrder: 'date-asc',
 };
 
 const STORAGE_KEY = 'filmfest_app_state_v1';
@@ -20,6 +21,7 @@ export function persistState() {
             selectedDates: Array.from(state.selectedDates),
             dataSource: state.dataSource,
             sourceFileName: state.sourceFileName || '',
+            sortOrder: state.sortOrder || 'date-asc',
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (error) {
@@ -43,6 +45,7 @@ export function restoreState() {
         state.selectedMovies = new Map();
         state.dataSource = saved.dataSource || null;
         state.sourceFileName = saved.sourceFileName || '';
+        state.sortOrder = saved.sortOrder || 'date-asc';
 
         const selectedIds = new Set(Array.isArray(saved.selectedMovieIds) ? saved.selectedMovieIds : []);
         state.moviesData.forEach((movie) => {
