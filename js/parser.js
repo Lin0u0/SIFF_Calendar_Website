@@ -95,8 +95,8 @@ function normalizeData(rows, headers) {
             const rawTime = row['放映时间'];
 
             if (rawTime instanceof Date) {
-                dateStr = `${rawTime.getMonth() + 1}月${rawTime.getDate()}日`;
-                timeStr = `${String(rawTime.getHours()).padStart(2, '0')}:${String(rawTime.getMinutes()).padStart(2, '0')}`;
+                dateStr = `${rawTime.getUTCMonth() + 1}月${rawTime.getUTCDate()}日`;
+                timeStr = `${String(rawTime.getUTCHours()).padStart(2, '0')}:${String(rawTime.getUTCMinutes()).padStart(2, '0')}`;
             } else if (typeof rawTime === 'string') {
                 dateStr = rawTime;
             }
